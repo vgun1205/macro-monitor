@@ -299,7 +299,6 @@ const SECTIONS = [
   { label: "금리 · 국내", ids: ["ktb3y", "ktb5y", "ktb10y", "ktb20y", "ktb30y"] },
   { label: "금리 · 해외", ids: ["ust5y", "ust10y", "ust20y", "ust30y", "eu10y", "eu20y"] },
   { label: "환율", ids: ["usdkrw", "eurkrw"] },
-  { label: "금리스프레드 · 미국", ids: ["us_sp20", "us_sp30"] },
   { label: "주가", ids: ["kospi", "samsung"] },
   { label: "스프레드 · 신용", ids: ["sgb_aaa_5y", "sgb_aaa_10y", "corp_aam_3y", "corp_aam_10y"] },
 ];
