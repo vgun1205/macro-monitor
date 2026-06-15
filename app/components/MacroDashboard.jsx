@@ -73,21 +73,7 @@ const lastDayOfMonth = (y, mi) => new Date(y, mi + 1, 0);
 const fmtMD = (iso) => { const d = parseISO(iso); return `${d.getMonth() + 1}/${d.getDate()}`; };
 function asOfDate(sorted, target) { let res = null; for (const d of sorted) { if (d <= target) res = d; else break; } return res; }
 
-/* ---- 값 조회 (derived 자동 계산) ---- */
-function getValue(data, dateISO, id) {
-  if (!dateISO) return null;
-  const item = ITEM_BY_ID[id];
-  if (item && item.from) {
-    const a = getValue(data, dateISO, item.from[0]);
-    const b = getValue(data, dateISO, item.from[1]);
-    if (a == null || b == null) return null;
-    return (a - b) * 100;
-  }
-  const row = data[dateISO];
-  if (!row) return null;
-  const v = row[id];
-  return v == null || v === "" || isNaN(v) ? null : Number(v);
-}
+/* 값 조회(as-of/정확/직전)는 Dashboard 내부 헬퍼에서 datesByInd 기반으로 처리한다. */
 
 /* ---- 포맷 ---- */
 function fmtVal(kind, v) {
@@ -208,6 +194,25 @@ export default function MacroDashboard() {
   }, []);
 
   const sortedDates = useMemo(() => Object.keys(data).sort(), [data]);
+
+  /* 지표별 가용 날짜(오름차순). 파생지표는 두 다리 모두 존재하는 날짜의 교집합. */
+  const datesByInd = useMemo(() => {
+    const m = {};
+    for (const d of sortedDates) {
+      const row = data[d]; if (!row) continue;
+      for (const id in row) {
+        const v = row[id];
+        if (v != null && v !== "" && !isNaN(v)) (m[id] ??= []).push(d);
+      }
+    }
+    for (const it of ALL_ITEMS) {
+      if (!it.from) continue;
+      const set = new Set(m[it.from[0]] || []);
+      m[it.id] = (m[it.from[1]] || []).filter((d) => set.has(d));
+    }
+    return m;
+  }, [data, sortedDates]);
+
   useEffect(() => {
     if (sortedDates.length && (!currentDate || !data[currentDate])) setCurrentDate(sortedDates[sortedDates.length - 1]);
   }, [sortedDates, currentDate, data]);
@@ -279,7 +284,7 @@ export default function MacroDashboard() {
           </div></div>
         )}
         {!empty && tab === "dashboard" && (
-          <Dashboard data={data} currentDate={currentDate} cmpCols={cmpCols} dailyCols={dailyCols} anchorCols={anchorCols} dailyCount={dailyCount} setDailyCount={setDailyCount} />
+          <Dashboard data={data} datesByInd={datesByInd} currentDate={currentDate} cmpCols={cmpCols} dailyCols={dailyCols} anchorCols={anchorCols} dailyCount={dailyCount} setDailyCount={setDailyCount} />
         )}
         {tab === "edit" && <EditPanel data={data} sortedDates={sortedDates} pushRows={pushRows} deleteDates={deleteDates} />}
         {tab === "import" && <ImportPanel data={data} pushRows={pushRows} />}
@@ -291,7 +296,36 @@ export default function MacroDashboard() {
 }
 
 /* ---- 대시보드 표 ---- */
-function Dashboard({ data, currentDate, cmpCols, dailyCols, anchorCols, dailyCount, setDailyCount }) {
+function Dashboard({ data, datesByInd, currentDate, cmpCols, dailyCols, anchorCols, dailyCount, setDailyCount }) {
+  // 특정 날짜의 정확한 값(파생지표는 두 다리에서 계산). 없으면 null.
+  const valueAt = (id, d) => {
+    if (!d) return null;
+    const it = ITEM_BY_ID[id];
+    if (it && it.from) {
+      const a = valueAt(it.from[0], d), b = valueAt(it.from[1], d);
+      return a == null || b == null ? null : (a - b) * 100;
+    }
+    const row = data[d]; if (!row) return null;
+    const v = row[id];
+    return v == null || v === "" || isNaN(v) ? null : Number(v);
+  };
+  // 기준일 시점에 해당 지표가 가진 '최신 가용 날짜'(≤ target)
+  const asOfDateFor = (id, target) => {
+    if (!target) return null;
+    const ds = datesByInd[id]; if (!ds || !ds.length) return null;
+    let res = null;
+    for (const d of ds) { if (d <= target) res = d; else break; }
+    return res;
+  };
+  const valAsOf = (id, target) => valueAt(id, asOfDateFor(id, target));
+  // 기준일 시점 최신값의 '직전 관측치' 값 (전일비 계산용)
+  const prevObsVal = (id, target) => {
+    const ds = datesByInd[id]; if (!ds) return null;
+    const d0 = asOfDateFor(id, target); if (!d0) return null;
+    let prev = null;
+    for (const d of ds) { if (d < d0) prev = d; else break; }
+    return valueAt(id, prev);
+  };
   return (
     <div>
       <div style={S.dashControls}>
@@ -307,24 +341,24 @@ function Dashboard({ data, currentDate, cmpCols, dailyCols, anchorCols, dailyCou
               <thead><tr>
                 <th style={{ ...S.th, ...S.thIndic }}>지표</th>
                 <th style={{ ...S.th, ...S.thCurrent }} title={currentDate}>현재일</th>
-                {cmpCols.map((c) => <th key={c.key} style={{ ...S.th, ...S.thCmp }} title={c.date || "데이터 없음"}>{c.title}</th>)}
-                {dailyCols.map((c) => <th key={c.key} style={{ ...S.th, ...S.thDaily }} title={c.date}>{c.title}</th>)}
-                {anchorCols.map((c, i) => <th key={c.key} style={{ ...S.th, ...S.thAnchor, ...(i === 0 ? S.divider : {}) }} title={c.date || "데이터 없음"}>{c.title}</th>)}
-                <th style={{ ...S.th, ...S.thTrend }}>추세</th>
+                {cmpCols.map((c, i) => <th key={c.key} style={{ ...S.th, ...S.thCmp, ...(i === 0 ? S.groupSep : {}) }} title={c.date || "데이터 없음"}>{c.title}</th>)}
+                {dailyCols.map((c, i) => <th key={c.key} style={{ ...S.th, ...S.thDaily, ...(i === 0 ? S.groupSep : {}) }} title={c.date}>{c.title}</th>)}
+                {anchorCols.map((c, i) => <th key={c.key} style={{ ...S.th, ...S.thAnchor, ...(i === 0 ? S.groupSep : {}) }} title={c.date || "데이터 없음"}>{c.title}</th>)}
+                <th style={{ ...S.th, ...S.thTrend, ...S.groupSep }}>추세</th>
               </tr></thead>
               <tbody>
                 {g.items.map((it) => {
-                  const cur = getValue(data, currentDate, it.id);
-                  const spark = [...dailyCols.slice().reverse().map((c) => getValue(data, c.date, it.id)), cur];
+                  const cur = valAsOf(it.id, currentDate);
+                  const spark = [...dailyCols.slice().reverse().map((c) => valueAt(it.id, c.date)), cur];
                   return (
                     <tr key={it.id}>
                       <td style={{ ...S.td, ...S.tdIndic }}>{it.label}</td>
                       <td style={{ ...S.td, ...S.tdCurrent }}>{fmtVal(it.kind, cur)}</td>
-                      {cmpCols.map((c) => { const d = fmtDelta(it.kind, cur, getValue(data, c.date, it.id));
-                        return <td key={c.key} style={{ ...S.td, ...S.tdCmp }}><span style={{ color: d.color, fontWeight: 600 }}>{d.text}</span>{d.sub && <span style={{ ...S.cmpSub, color: d.color }}>{d.sub}</span>}</td>; })}
-                      {dailyCols.map((c) => <td key={c.key} style={{ ...S.td, ...S.tdDaily }}>{fmtVal(it.kind, getValue(data, c.date, it.id))}</td>)}
-                      {anchorCols.map((c, i) => <td key={c.key} style={{ ...S.td, ...S.tdAnchor, ...(i === 0 ? S.divider : {}) }}>{fmtVal(it.kind, getValue(data, c.date, it.id))}</td>)}
-                      <td style={{ ...S.td, ...S.tdTrend }}><Spark series={spark} /></td>
+                      {cmpCols.map((c, i) => { const base = c.key === "d" ? prevObsVal(it.id, currentDate) : valAsOf(it.id, c.date); const d = fmtDelta(it.kind, cur, base);
+                        return <td key={c.key} style={{ ...S.td, ...S.tdCmp, ...(i === 0 ? S.groupSep : {}) }}><span style={{ color: d.color, fontWeight: 600 }}>{d.text}</span>{d.sub && <span style={{ ...S.cmpSub, color: d.color }}>{d.sub}</span>}</td>; })}
+                      {dailyCols.map((c, i) => <td key={c.key} style={{ ...S.td, ...S.tdDaily, ...(i === 0 ? S.groupSep : {}) }}>{fmtVal(it.kind, valueAt(it.id, c.date))}</td>)}
+                      {anchorCols.map((c, i) => <td key={c.key} style={{ ...S.td, ...S.tdAnchor, ...(i === 0 ? S.groupSep : {}) }}>{fmtVal(it.kind, valAsOf(it.id, c.date))}</td>)}
+                      <td style={{ ...S.td, ...S.tdTrend, ...S.groupSep }}><Spark series={spark} /></td>
                     </tr>
                   );
                 })}
@@ -495,7 +529,9 @@ const S = {
   thTrend: { textAlign: "center" },
   td: { padding: "7px 10px", textAlign: "right", whiteSpace: "nowrap", borderBottom: `1px solid ${T.lineSoft}` },
   tdIndic: { textAlign: "left", fontFamily: sans, fontWeight: 600, fontSize: 12.5, position: "sticky", left: 0, background: T.panel, zIndex: 1 },
-  tdDaily: { color: "#6B7280" }, tdAnchor: { color: "#7B828E" }, divider: { borderLeft: `2px solid ${T.line}` },
+  tdDaily: { color: "#6B7280" }, tdAnchor: { color: "#7B828E" },
+  divider: { borderLeft: `2px solid ${T.line}` },
+  groupSep: { borderLeft: `1px solid ${T.line}` }, // 컬럼 그룹 경계 — 일정한 세로 구분선
   tdCurrent: { background: T.goldBg, fontWeight: 700, borderLeft: `2px solid ${T.gold}` },
   tdCmp: { background: "#F7F8FA" }, cmpSub: { display: "block", fontSize: 10.5, opacity: 0.85, marginTop: 1 },
   tdTrend: { textAlign: "center", padding: "4px 8px" },
