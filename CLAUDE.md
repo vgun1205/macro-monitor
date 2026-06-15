@@ -58,8 +58,8 @@
 2. 환경변수 4개 등록 (위와 동일)
 3. Cron 인증: Vercel Cron이 `Authorization: Bearer $CRON_SECRET`로 호출하도록
    Project Settings에서 설정(또는 vercel.json 유지 + 라우트의 시크릿 검사 확인).
-4. `vercel.json`의 스케줄 `0 22 * * 1-5`(UTC) = 한국시각 익일 07:00. 미 증시 마감 후 시점.
-   필요시 조정.
+4. `vercel.json`의 스케줄 `0 0 * * 1-5`(UTC) = 한국시각 평일 09:00. 출근 시점 자동 갱신.
+   필요시 조정(UTC 기준).
 5. 배포 후 최초 1회 `npm run backfill`(로컬에서 prod DB로) 또는 `/api/cron/collect` 수동 호출.
 
 ## 7. Claude Code 할 일 체크리스트
