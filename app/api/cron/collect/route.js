@@ -2,6 +2,7 @@ import { collectRecent } from "../../../../lib/collectors/index.js";
 import { getConfig, setConfig } from "../../../../lib/db.js";
 import { refreshAccessToken, sendMemo } from "../../../../lib/kakao.js";
 import { buildSummary } from "../../../../lib/summary.js";
+import { sendReportMail } from "../../../../lib/mail.js";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -36,7 +37,9 @@ export async function GET(req) {
   try {
     const result = await collectRecent(10);
     const kakao = await notifyKakao();
-    return Response.json({ ok: true, at: new Date().toISOString(), ...result, kakao });
+    let mail = "skip";
+    try { mail = await sendReportMail(); } catch (e) { mail = `error:${e.message}`; }
+    return Response.json({ ok: true, at: new Date().toISOString(), ...result, kakao, mail });
   } catch (e) {
     return Response.json({ ok: false, error: e.message }, { status: 500 });
   }
