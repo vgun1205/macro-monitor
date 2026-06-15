@@ -332,6 +332,7 @@ function fmtRptDelta(kind, cur, base) {
 
 /* ---- 대시보드(보고서 양식) 표 ---- */
 function Dashboard({ data, datesByInd, currentDate, refs }) {
+  const [showSrc, setShowSrc] = useState(false);
   // 특정 날짜의 정확한 값(파생지표는 두 다리에서 계산). 없으면 null.
   const valueAt = (id, d) => {
     if (!d) return null;
@@ -383,6 +384,21 @@ function Dashboard({ data, datesByInd, currentDate, refs }) {
   return (
     <div className="report">
       <h2 className="report-print-title" style={S.printTitle}>거시경제지표 현황 (기준일 {currentDate})</h2>
+      <div className="no-print" style={{ marginBottom: 12 }}>
+        <button onClick={() => setShowSrc((v) => !v)} style={S.srcToggle}>ⓘ 데이터 출처 · 기준 안내 {showSrc ? "▲" : "▼"}</button>
+        {showSrc && (
+          <div style={S.srcPanel}>
+            <p style={S.srcLine}><b>금리 · 국내</b> (국고채 3/5/10/20/30Y) — 한국은행 <b>ECOS</b> (817Y002 시장금리) 자동수집</p>
+            <p style={S.srcLine}><b>금리 · 해외</b> — 미국 <b>FRED</b>(DGS5/10/20/30), 유럽 <b>ECB</b> AAA 국채 스팟(YC)</p>
+            <p style={S.srcLine}><b>환율</b> — 한국은행 ECOS(원/달러·원/유로 매매기준율) · <b>주가</b> — Yahoo Finance(코스피·삼성전자)</p>
+            <p style={S.srcLine}><b>스프레드 · 신용</b> = 평가수익률 − 국고채(동일만기). 회사채 AA- 3Y는 ECOS(평가사 민평기반)로 자동계산, 특수채 AAA 5/10Y·회사채 AA- 10Y는 평가사 5사평균 기준 <b>수기입력</b></p>
+            <p style={{ ...S.srcLine, marginTop: 8, color: T.gold, borderTop: `1px solid ${T.lineSoft}`, paddingTop: 8 }}>
+              ※ <b>공식 보고서와의 차이</b>: 귀사 공식 보고서는 채권금리를 <b>‘채권시가평가수익률 — 평가사 5사평균’</b>(나이스피앤아이·한국자산평가·KIS·에프앤·이지)으로 산출합니다.
+              본 앱의 국고채는 <b>ECOS(한국은행)</b> 자동수집이라 평가사 평균과 <b>소수점 단위 차이</b>가 있을 수 있습니다 (예: 국고 3Y 6/12 — ECOS 3.808 vs 평가사 3.790).
+            </p>
+          </div>
+        )}
+      </div>
       <div style={S.tableWrap}>
         <table style={S.rtable} className="report-table">
           <thead>
@@ -592,6 +608,9 @@ const S = {
   // 보고서 괘선표 — 균일한 그리드
   printTitle: { display: "none" },
   rptNote: { fontSize: 11, color: T.inkSoft, marginTop: 10, lineHeight: 1.6, fontFamily: mono },
+  srcToggle: { background: "#fff", border: `1px solid ${T.line}`, borderRadius: 6, padding: "6px 12px", fontSize: 12.5, color: T.header, cursor: "pointer", fontWeight: 600 },
+  srcPanel: { marginTop: 8, background: "#FBFBF9", border: `1px solid ${T.line}`, borderRadius: 8, padding: "12px 16px" },
+  srcLine: { fontSize: 12, color: T.ink, lineHeight: 1.7, margin: "2px 0" },
   rtable: { borderCollapse: "collapse", width: "100%", fontSize: 12, fontFamily: mono, border: "1px solid #9AA0AB" },
   rth: { padding: "6px 8px", textAlign: "right", fontWeight: 700, fontSize: 11, whiteSpace: "nowrap", border: "1px solid #D2D6DD", background: "#F2F3F5", color: "#2A2F3A", position: "sticky", top: 0 },
   rthCat: { textAlign: "center", background: "#E7E9EE", minWidth: 150 },
