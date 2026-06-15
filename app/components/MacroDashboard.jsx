@@ -135,6 +135,13 @@ export default function MacroDashboard() {
   const [tab, setTab] = useState("dashboard");
   const [syncing, setSyncing] = useState(false);
 
+  /* PWA: 서비스워커 등록 */
+  useEffect(() => {
+    if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    }
+  }, []);
+
   /* 로드: 캐시 → API */
   useEffect(() => {
     try { const c = localStorage.getItem(CACHE_KEY); if (c) setData(JSON.parse(c)); } catch {}
@@ -238,20 +245,10 @@ export default function MacroDashboard() {
 
   const empty = sortedDates.length === 0;
 
-  const cmpCols = refs ? [
-    { key: "d", title: "전일비", date: refs.prevDay }, { key: "mom", title: "전월비", date: refs.m1 },
-    { key: "qoq", title: "전분기비", date: refs.prevQ }, { key: "yoy", title: "전년비", date: refs.prevYear },
-  ] : [];
-  const dailyCols = refs ? refs.strip.slice().reverse().map((d) => ({ key: d, title: fmtMD(d), date: d })) : [];
-  const anchorCols = refs ? [
-    { key: "m1", title: "전월말", date: refs.m1 }, { key: "m2", title: "2M전", date: refs.m2 }, { key: "m3", title: "3M전", date: refs.m3 },
-    { key: "y25", title: "25말", date: refs.y25 }, { key: "y24", title: "24말", date: refs.y24 }, { key: "y23", title: "23말", date: refs.y23 },
-  ] : [];
-
   return (
-    <div style={S.root}>
+    <div style={S.root} className="macro-root">
       <style>{CSS}</style>
-      <header style={S.header}>
+      <header style={S.header} className="no-print">
         <div style={S.headerLeft}>
           <div style={S.titleRow}>
             <span style={S.logoDot} /><h1 style={S.title}>거시지표 일별 모니터</h1>
@@ -264,6 +261,7 @@ export default function MacroDashboard() {
             </select>
             <span style={S.asOfNote}>전일 {refs?.prevDay || "–"}</span>
             <button onClick={triggerCollect} style={S.syncBtn} disabled={syncing}>{syncing ? "동기화중…" : "지금 수집"}</button>
+            {tab === "dashboard" && <button onClick={() => window.print()} style={S.printBtn}>인쇄 / PDF</button>}
           </div>
         </div>
         <nav style={S.tabs}>
@@ -273,7 +271,7 @@ export default function MacroDashboard() {
         </nav>
       </header>
 
-      {err && <div style={S.errBanner}>{err}</div>}
+      {err && <div style={S.errBanner} className="no-print">{err}</div>}
 
       <main style={S.main}>
         {empty && tab === "dashboard" && (
@@ -284,19 +282,57 @@ export default function MacroDashboard() {
           </div></div>
         )}
         {!empty && tab === "dashboard" && (
-          <Dashboard data={data} datesByInd={datesByInd} currentDate={currentDate} cmpCols={cmpCols} dailyCols={dailyCols} anchorCols={anchorCols} dailyCount={dailyCount} setDailyCount={setDailyCount} />
+          <Dashboard data={data} datesByInd={datesByInd} currentDate={currentDate} refs={refs} />
         )}
         {tab === "edit" && <EditPanel data={data} sortedDates={sortedDates} pushRows={pushRows} deleteDates={deleteDates} />}
         {tab === "import" && <ImportPanel data={data} pushRows={pushRows} />}
       </main>
 
-      <footer style={S.footer}>미국 스프레드 = 장기물 − 10Y · 신용스프레드 = 대 국고(bp) · 상승=적색 / 하락=청색 · 자동수집: ECOS·FRED·ECB·Yahoo</footer>
+      <footer style={S.footer} className="no-print">미국 스프레드 = 장기물 − 10Y · 신용스프레드 = 대 국고 · 상승=적색 / 하락=청색 · 자동수집: ECOS·FRED·ECB·Yahoo</footer>
     </div>
   );
 }
 
-/* ---- 대시보드 표 ---- */
-function Dashboard({ data, datesByInd, currentDate, cmpCols, dailyCols, anchorCols, dailyCount, setDailyCount }) {
+/* ---- 보고서 양식: 섹션(분류)·표기 헬퍼 ---- */
+// 사내 보고서와 동일한 구성. 환P / 연금저축 계약이전 행은 제외(별도 지표·내부수치).
+const SECTIONS = [
+  { label: "금리 · 국내", ids: ["ktb3y", "ktb5y", "ktb10y", "ktb20y", "ktb30y"] },
+  { label: "금리 · 해외", ids: ["ust5y", "ust10y", "ust20y", "ust30y", "eu10y", "eu20y"] },
+  { label: "환율", ids: ["usdkrw", "eurkrw"] },
+  { label: "금리스프레드 · 미국", ids: ["us_sp20", "us_sp30"] },
+  { label: "주가", ids: ["kospi", "samsung"] },
+  { label: "스프레드 · 신용", ids: ["sgb_aaa_5y", "sgb_aaa_10y", "corp_aam_3y", "corp_aam_10y"] },
+];
+const monthEndLabel = (iso) => (iso ? `'${iso.slice(2, 4)}.${Number(iso.slice(5, 7))}末` : "–");
+const dayLabel = (iso) => (iso ? `${Number(iso.slice(5, 7))}.${Number(iso.slice(8, 10))}` : "–");
+
+// 레벨 표기: 금리=%(2자리), 스프레드=%p(2자리, 내부 bp/100), 환율/주가=정수 천단위
+function fmtLevel(kind, v) {
+  if (v == null) return "–";
+  switch (kind) {
+    case "rate": return v.toFixed(2);
+    case "bp": return (v / 100).toFixed(2);
+    case "fx":
+    case "idx":
+    case "won": return Math.round(v).toLocaleString("ko-KR");
+    default: return String(v);
+  }
+}
+// 증감 표기: 금리/스프레드=bp(정수, 하락 △), 환율/주가=%(1자리, 하락 △)
+function fmtRptDelta(kind, cur, base) {
+  if (cur == null || base == null) return { text: "–", color: T.flat };
+  if (kind === "rate" || kind === "bp") {
+    const d = kind === "rate" ? (cur - base) * 100 : cur - base;
+    const r = Math.round(d);
+    return { text: r === 0 ? "0bp" : r > 0 ? `+${r}bp` : `△${Math.abs(r)}bp`, color: colorOf(d) };
+  }
+  const pct = base !== 0 ? (cur / base - 1) * 100 : 0;
+  const r = pct;
+  return { text: Math.abs(r) < 0.05 ? "0%" : r > 0 ? `+${r.toFixed(1)}%` : `△${Math.abs(r).toFixed(1)}%`, color: colorOf(r) };
+}
+
+/* ---- 대시보드(보고서 양식) 표 ---- */
+function Dashboard({ data, datesByInd, currentDate, refs }) {
   // 특정 날짜의 정확한 값(파생지표는 두 다리에서 계산). 없으면 null.
   const valueAt = (id, d) => {
     if (!d) return null;
@@ -326,47 +362,56 @@ function Dashboard({ data, datesByInd, currentDate, cmpCols, dailyCols, anchorCo
     for (const d of ds) { if (d < d0) prev = d; else break; }
     return valueAt(id, prev);
   };
+  if (!refs) return null;
+  // 레벨 컬럼: 연말 → 월말 → 전일 → 현재 (오래된 것 → 최신, 사내 보고서 순서)
+  const lvlCols = [
+    { key: "y23", title: "'23末", date: refs.y23 },
+    { key: "y24", title: "'24末", date: refs.y24 },
+    { key: "y25", title: "'25末", date: refs.y25 },
+    { key: "m3", title: monthEndLabel(refs.m3), date: refs.m3 },
+    { key: "m2", title: monthEndLabel(refs.m2), date: refs.m2 },
+    { key: "m1", title: monthEndLabel(refs.m1), date: refs.m1 },
+    { key: "prevDay", title: dayLabel(refs.prevDay), date: refs.prevDay },
+    { key: "cur", title: dayLabel(currentDate), date: currentDate, cur: true },
+  ];
+  // 증감 컬럼
+  const deltaCols = [
+    { key: "d", title: "전일比" },
+    { key: "mom", title: "전월比", date: refs.m1 },
+    { key: "qoq", title: "전분기比", date: refs.prevQ },
+    { key: "yoy", title: "전년比", date: refs.prevYear },
+  ];
   return (
-    <div>
-      <div style={S.dashControls}>
-        <span style={S.ctrlLabel}>일별 표시 영업일수</span>
-        {[3, 5, 8].map((n) => <button key={n} onClick={() => setDailyCount(n)} style={{ ...S.chip, ...(dailyCount === n ? S.chipActive : {}) }}>{n}일</button>)}
-        <span style={S.legend}><i style={{ ...S.legendDot, background: T.up }} /> 상승<i style={{ ...S.legendDot, background: T.down, marginLeft: 12 }} /> 하락</span>
+    <div className="report">
+      <h2 className="report-print-title" style={S.printTitle}>거시경제지표 현황 (기준일 {currentDate})</h2>
+      <div style={S.tableWrap}>
+        <table style={S.rtable} className="report-table">
+          <thead>
+            <tr>
+              <th style={{ ...S.rth, ...S.rthCat }} colSpan={2}>분류 / 지표</th>
+              {lvlCols.map((c, i) => <th key={c.key} style={{ ...S.rth, ...S.rthNum, ...(c.cur ? S.rthCur : {}), ...(i === 0 ? S.groupSep : {}) }} title={c.date || "데이터 없음"}>{c.title}</th>)}
+              {deltaCols.map((c, i) => <th key={c.key} style={{ ...S.rth, ...S.rthDelta, ...(i === 0 ? S.groupSep : {}) }}>{c.title}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {SECTIONS.map((sec) => sec.ids.map((id, ri) => {
+              const it = ITEM_BY_ID[id]; if (!it) return null;
+              const kind = it.kind;
+              const cur = valAsOf(id, currentDate);
+              return (
+                <tr key={id}>
+                  {ri === 0 && <td rowSpan={sec.ids.length} style={{ ...S.rtd, ...S.rtdCat }}>{sec.label}</td>}
+                  <td style={{ ...S.rtd, ...S.rtdName }}>{it.label}</td>
+                  {lvlCols.map((c, i) => <td key={c.key} style={{ ...S.rtd, ...S.rtdNum, ...(c.cur ? S.rtdCur : {}), ...(i === 0 ? S.groupSep : {}) }}>{fmtLevel(kind, valAsOf(id, c.date))}</td>)}
+                  {deltaCols.map((c, i) => { const base = c.key === "d" ? prevObsVal(id, currentDate) : valAsOf(id, c.date); const d = fmtRptDelta(kind, cur, base);
+                    return <td key={c.key} style={{ ...S.rtd, ...S.rtdDelta, ...(i === 0 ? S.groupSep : {}), color: d.color, fontWeight: 600 }}>{d.text}</td>; })}
+                </tr>
+              );
+            }))}
+          </tbody>
+        </table>
       </div>
-      {GROUPS.map((g) => (
-        <section key={g.id} style={S.card}>
-          <div style={S.cardHead}><h2 style={S.cardTitle}>{g.label}</h2><span style={S.cardUnit}>단위 {g.unit}</span></div>
-          <div style={S.tableWrap}>
-            <table style={S.table}>
-              <thead><tr>
-                <th style={{ ...S.th, ...S.thIndic }}>지표</th>
-                <th style={{ ...S.th, ...S.thCurrent }} title={currentDate}>현재일</th>
-                {cmpCols.map((c, i) => <th key={c.key} style={{ ...S.th, ...S.thCmp, ...(i === 0 ? S.groupSep : {}) }} title={c.date || "데이터 없음"}>{c.title}</th>)}
-                {dailyCols.map((c, i) => <th key={c.key} style={{ ...S.th, ...S.thDaily, ...(i === 0 ? S.groupSep : {}) }} title={c.date}>{c.title}</th>)}
-                {anchorCols.map((c, i) => <th key={c.key} style={{ ...S.th, ...S.thAnchor, ...(i === 0 ? S.groupSep : {}) }} title={c.date || "데이터 없음"}>{c.title}</th>)}
-                <th style={{ ...S.th, ...S.thTrend, ...S.groupSep }}>추세</th>
-              </tr></thead>
-              <tbody>
-                {g.items.map((it) => {
-                  const cur = valAsOf(it.id, currentDate);
-                  const spark = [...dailyCols.slice().reverse().map((c) => valueAt(it.id, c.date)), cur];
-                  return (
-                    <tr key={it.id}>
-                      <td style={{ ...S.td, ...S.tdIndic }}>{it.label}</td>
-                      <td style={{ ...S.td, ...S.tdCurrent }}>{fmtVal(it.kind, cur)}</td>
-                      {cmpCols.map((c, i) => { const base = c.key === "d" ? prevObsVal(it.id, currentDate) : valAsOf(it.id, c.date); const d = fmtDelta(it.kind, cur, base);
-                        return <td key={c.key} style={{ ...S.td, ...S.tdCmp, ...(i === 0 ? S.groupSep : {}) }}><span style={{ color: d.color, fontWeight: 600 }}>{d.text}</span>{d.sub && <span style={{ ...S.cmpSub, color: d.color }}>{d.sub}</span>}</td>; })}
-                      {dailyCols.map((c, i) => <td key={c.key} style={{ ...S.td, ...S.tdDaily, ...(i === 0 ? S.groupSep : {}) }}>{fmtVal(it.kind, valueAt(it.id, c.date))}</td>)}
-                      {anchorCols.map((c, i) => <td key={c.key} style={{ ...S.td, ...S.tdAnchor, ...(i === 0 ? S.groupSep : {}) }}>{fmtVal(it.kind, valAsOf(it.id, c.date))}</td>)}
-                      <td style={{ ...S.td, ...S.tdTrend, ...S.groupSep }}><Spark series={spark} /></td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      ))}
+      <p style={S.rptNote} className="no-print">레벨: 금리·스프레드 %, 환율 원, 주가 pt/원 · 증감: 금리·스프레드 bp, 환율·주가 % · 하락 △ · 발표지연 지표는 기준일 시점 최신 가용값(as-of)</p>
     </div>
   );
 }
@@ -503,6 +548,7 @@ const S = {
   dateSelect: { background: T.headerSoft, color: "#fff", border: `1px solid ${T.gold}`, borderRadius: 4, padding: "5px 9px", fontSize: 14, fontFamily: mono, fontWeight: 600 },
   asOfNote: { fontSize: 11, color: "#6E7787", fontFamily: mono },
   syncBtn: { background: T.gold, color: "#15181E", border: "none", borderRadius: 4, padding: "5px 11px", fontSize: 12, fontWeight: 700, cursor: "pointer" },
+  printBtn: { background: "transparent", color: "#fff", border: `1px solid ${T.gold}`, borderRadius: 4, padding: "5px 11px", fontSize: 12, fontWeight: 700, cursor: "pointer" },
   tabs: { display: "flex", gap: 2 },
   tab: { background: "transparent", border: "none", color: "#8A93A4", padding: "9px 14px", fontSize: 13, cursor: "pointer", borderBottom: "2px solid transparent", fontFamily: sans },
   tabActive: { color: "#fff", borderBottom: `2px solid ${T.gold}` },
@@ -531,7 +577,7 @@ const S = {
   tdIndic: { textAlign: "left", fontFamily: sans, fontWeight: 600, fontSize: 12.5, position: "sticky", left: 0, background: T.panel, zIndex: 1 },
   tdDaily: { color: "#6B7280" }, tdAnchor: { color: "#7B828E" },
   divider: { borderLeft: `2px solid ${T.line}` },
-  groupSep: { borderLeft: `1px solid ${T.line}` }, // 컬럼 그룹 경계 — 일정한 세로 구분선
+  groupSep: { borderLeft: "2px solid #AEB4BE" }, // 주요 그룹 경계(현재/증감) — 강조 세로선
   tdCurrent: { background: T.goldBg, fontWeight: 700, borderLeft: `2px solid ${T.gold}` },
   tdCmp: { background: "#F7F8FA" }, cmpSub: { display: "block", fontSize: 10.5, opacity: 0.85, marginTop: 1 },
   tdTrend: { textAlign: "center", padding: "4px 8px" },
@@ -544,6 +590,21 @@ const S = {
   hint: { fontSize: 12, color: T.inkSoft, lineHeight: 1.6, margin: "10px 18px" },
   msg: { marginTop: 10, fontSize: 12.5, color: T.header, background: "#EEF1F5", padding: "8px 11px", borderRadius: 6 },
   code: { fontFamily: mono, background: "#F1F3F6", padding: "2px 6px", borderRadius: 4, fontSize: 11.5, color: T.header },
+  // 보고서 괘선표 — 균일한 그리드
+  printTitle: { display: "none" },
+  rptNote: { fontSize: 11, color: T.inkSoft, marginTop: 10, lineHeight: 1.6, fontFamily: mono },
+  rtable: { borderCollapse: "collapse", width: "100%", fontSize: 12, fontFamily: mono, border: "1px solid #9AA0AB" },
+  rth: { padding: "6px 8px", textAlign: "right", fontWeight: 700, fontSize: 11, whiteSpace: "nowrap", border: "1px solid #D2D6DD", background: "#F2F3F5", color: "#2A2F3A", position: "sticky", top: 0 },
+  rthCat: { textAlign: "center", background: "#E7E9EE", minWidth: 150 },
+  rthNum: { color: "#3C4350" },
+  rthCur: { background: T.goldBg, color: "#6B5417" },
+  rthDelta: { background: "#EEF1F5", color: "#3C4350" },
+  rtd: { padding: "5px 8px", textAlign: "right", whiteSpace: "nowrap", border: "1px solid #D2D6DD" },
+  rtdCat: { textAlign: "center", fontFamily: sans, fontWeight: 700, fontSize: 11.5, background: "#FAFAF7", verticalAlign: "middle" },
+  rtdName: { textAlign: "left", fontFamily: sans, fontWeight: 600, fontSize: 12, minWidth: 96 },
+  rtdNum: { color: T.ink },
+  rtdCur: { background: T.goldBg, fontWeight: 700 },
+  rtdDelta: { fontSize: 11.5 },
 };
 const CSS = `
   select:focus, input:focus, textarea:focus, button:focus-visible { outline: 2px solid ${T.gold}; outline-offset: 1px; }
@@ -551,4 +612,18 @@ const CSS = `
   ::-webkit-scrollbar { height: 10px; width: 10px; }
   ::-webkit-scrollbar-thumb { background: #CBD0D8; border-radius: 6px; }
   button:disabled { opacity: 0.6; cursor: default; }
+  .report-print-title { display: none; }
+  @media print {
+    @page { size: A4 landscape; margin: 8mm; }
+    html, body { background: #fff !important; }
+    .no-print { display: none !important; }
+    .macro-root { background: #fff !important; min-height: 0 !important; }
+    main { padding: 0 !important; max-width: none !important; }
+    .report > div { overflow: visible !important; }
+    .report-print-title { display: block !important; text-align: center; font-size: 15px; font-weight: 700; margin: 0 0 8px; }
+    .report-table { font-size: 8.5px !important; width: 100% !important; }
+    .report-table th, .report-table td { padding: 2px 3px !important; }
+    .report-table th { position: static !important; }
+    tbody tr:hover td { background: transparent !important; }
+  }
 `;
