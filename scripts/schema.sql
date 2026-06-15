@@ -11,3 +11,10 @@ CREATE TABLE IF NOT EXISTS observations (
 
 CREATE INDEX IF NOT EXISTS idx_obs_indicator ON observations (indicator);
 CREATE INDEX IF NOT EXISTS idx_obs_date ON observations (obs_date);
+
+-- 앱 설정 보관(카카오 리프레시 토큰 등). key-value.
+CREATE TABLE IF NOT EXISTS app_config (
+  key        TEXT PRIMARY KEY,
+  value      TEXT,
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
