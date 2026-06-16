@@ -7,6 +7,19 @@ import { sendReportMail } from "../../../../lib/mail.js";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
+// 2026 한국 공휴일(주말은 별도 체크). 발송 제외용.
+const KR_HOLIDAYS = new Set([
+  "2026-01-01", "2026-02-16", "2026-02-17", "2026-02-18", "2026-03-01", "2026-03-02",
+  "2026-05-05", "2026-05-24", "2026-05-25", "2026-06-06", "2026-08-15",
+  "2026-09-24", "2026-09-25", "2026-09-26", "2026-10-03", "2026-10-09", "2026-12-25",
+]);
+function isSendDay() {
+  const k = new Date(Date.now() + 9 * 3600 * 1000); // KST
+  const dow = k.getUTCDay();
+  const iso = k.toISOString().slice(0, 10);
+  return dow !== 0 && dow !== 6 && !KR_HOLIDAYS.has(iso); // 평일 & 비공휴일
+}
+
 // 수집 후 카카오 '나에게 보내기' 발송(설정돼 있을 때만, 실패해도 수집은 성공 처리)
 async function notifyKakao() {
   if (!process.env.KAKAO_REST_API_KEY) return "skip(no-key)";
@@ -36,8 +49,12 @@ export async function GET(req) {
   }
   try {
     const result = await collectRecent(10);
+    const mailto = new URL(req.url).searchParams.get("mailto"); // 테스트 수신자 오버라이드(있으면 항상 발송)
+    // 주말·공휴일엔 수집만 하고 발송은 생략(테스트 제외)
+    if (!mailto && !isSendDay()) {
+      return Response.json({ ok: true, at: new Date().toISOString(), ...result, kakao: "skip(휴일/주말)", mail: "skip(휴일/주말)" });
+    }
     const kakao = await notifyKakao();
-    const mailto = new URL(req.url).searchParams.get("mailto"); // 테스트 수신자 오버라이드
     let mail = "skip";
     try { mail = await sendReportMail(mailto || undefined); } catch (e) { mail = `error:${e.message}`; }
     return Response.json({ ok: true, at: new Date().toISOString(), ...result, kakao, mail });
