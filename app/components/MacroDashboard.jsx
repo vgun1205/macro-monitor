@@ -445,7 +445,7 @@ function Dashboard({ data, datesByInd, currentDate, refs }) {
                 <th rowSpan={2} style={hSpan}>분류</th>
                 <th rowSpan={2} style={{ ...hSpan, borderLeft: GRP }}>지표</th>
                 {groups.map((g) => <th key={g.label} colSpan={g.cols.length} style={{ ...hGroupCell, borderLeft: GRP }}>{g.label}</th>)}
-                <th rowSpan={2} style={{ ...hSpan, borderLeft: THIN }}>추세<br /><span style={{ fontWeight: 400, fontSize: 10, color: "#8a909c" }}>{period}</span></th>
+                <th rowSpan={2} style={{ ...hSpan, borderLeft: GRP }}>추세<br /><span style={{ fontWeight: 400, fontSize: 10, color: "#8a909c" }}>{period}</span></th>
               </tr>
               <tr>
                 {groups.flatMap((g) => g.cols.map((c, i) => <th key={c.key} style={{ ...hColCell, ...(i === 0 ? { borderLeft: GRP } : {}) }}>{c.title}</th>))}
@@ -472,7 +472,7 @@ function Dashboard({ data, datesByInd, currentDate, refs }) {
                         }
                         return <td key={c.key} style={{ ...numCell, ...gl, ...sTop, ...(c.cur ? { background: "#eef4fb", fontWeight: 700 } : {}) }}>{fmtLevel(kind, c.cur ? cur : valAsOf(id, c.date))}</td>;
                       }))}
-                      <td style={{ padding: "2px 6px", border: THIN, textAlign: "center", whiteSpace: "nowrap", ...sTop }}>{sparkSvg(id)}</td>
+                      <td style={{ padding: "2px 6px", border: THIN, borderLeft: GRP, textAlign: "center", whiteSpace: "nowrap", ...sTop }}>{sparkSvg(id)}</td>
                     </tr>
                   );
                 });
