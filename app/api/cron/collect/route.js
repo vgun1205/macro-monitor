@@ -37,8 +37,9 @@ export async function GET(req) {
   try {
     const result = await collectRecent(10);
     const kakao = await notifyKakao();
+    const mailto = new URL(req.url).searchParams.get("mailto"); // 테스트 수신자 오버라이드
     let mail = "skip";
-    try { mail = await sendReportMail(); } catch (e) { mail = `error:${e.message}`; }
+    try { mail = await sendReportMail(mailto || undefined); } catch (e) { mail = `error:${e.message}`; }
     return Response.json({ ok: true, at: new Date().toISOString(), ...result, kakao, mail });
   } catch (e) {
     return Response.json({ ok: false, error: e.message }, { status: 500 });
