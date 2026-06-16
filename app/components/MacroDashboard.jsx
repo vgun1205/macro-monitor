@@ -227,12 +227,9 @@ export default function MacroDashboard() {
   }, [data, sortedDates]);
 
   useEffect(() => {
-    if (sortedDates.length && (!currentDate || !data[currentDate])) {
-      // 기준일 기본값 = 국고채 최신 발표일(환율·주가만 갱신된 날엔 채권 기준일로)
-      const anc = datesByInd["ktb10y"];
-      setCurrentDate(anc && anc.length ? anc[anc.length - 1] : sortedDates[sortedDates.length - 1]);
-    }
-  }, [sortedDates, currentDate, data, datesByInd]);
+    // 기본 기준일 = 현시점(최신 보유 일자). 분류별 실제 데이터일자는 표에 따로 표기.
+    if (sortedDates.length && (!currentDate || !data[currentDate])) setCurrentDate(sortedDates[sortedDates.length - 1]);
+  }, [sortedDates, currentDate, data]);
 
   const refs = useMemo(() => {
     if (!currentDate) return null;
@@ -247,9 +244,11 @@ export default function MacroDashboard() {
       m3: monthEndBefore(3), m2: monthEndBefore(2), m1: monthEndBefore(1),
       prevQ: asOfDate(sortedDates, toISO(prevQEnd)), prevYear: asOfDate(sortedDates, `${y - 1}-12-31`),
       prevDay: idx > 0 ? sortedDates[idx - 1] : null,
-      strip: sortedDates.slice(Math.max(0, idx - dailyCount), idx),
+      d2: idx > 1 ? sortedDates[idx - 2] : null,
+      d3: idx > 2 ? sortedDates[idx - 3] : null,
+      spark: sortedDates.slice(Math.max(0, idx - 9), idx + 1),
     };
-  }, [currentDate, sortedDates, dailyCount]);
+  }, [currentDate, sortedDates]);
 
   if (!loaded) return <div style={{ padding: 40, fontFamily: "system-ui", color: T.inkSoft }}>불러오는 중…</div>;
 
@@ -306,12 +305,12 @@ export default function MacroDashboard() {
 /* ---- 보고서 양식: 섹션(분류)·표기 헬퍼 ---- */
 // 사내 보고서와 동일한 구성. 환P / 연금저축 계약이전 행은 제외(별도 지표·내부수치).
 const SECTIONS = [
-  { label: "금리 · 국내", ids: ["ktb3y", "ktb5y", "ktb10y", "ktb20y", "ktb30y"] },
-  { label: "금리 · 해외", ids: ["ust5y", "ust10y", "ust20y", "ust30y", "eu10y", "eu20y"] },
-  { label: "환율", ids: ["usdkrw", "eurkrw"] },
-  { label: "주가", ids: ["kospi", "samsung"] },
-  { label: "금리 · 신용", ids: ["sgbAAA5yYld", "sgbAAA10yYld", "corpAA3yYield", "corpAA10yYld"] },
-  { label: "스프레드 · 신용", ids: ["sgb_aaa_5y", "sgb_aaa_10y", "corp_aam_3y", "corp_aam_10y"] },
+  { label: "금리 · 국내", unit: "%", ids: ["ktb3y", "ktb5y", "ktb10y", "ktb20y", "ktb30y"] },
+  { label: "금리 · 해외", unit: "%", ids: ["ust5y", "ust10y", "ust20y", "ust30y", "eu10y", "eu20y"] },
+  { label: "환율", unit: "원", ids: ["usdkrw", "eurkrw"] },
+  { label: "주가", unit: "pt/원", ids: ["kospi", "samsung"] },
+  { label: "금리 · 신용", unit: "%", ids: ["sgbAAA5yYld", "sgbAAA10yYld", "corpAA3yYield", "corpAA10yYld"] },
+  { label: "스프레드 · 신용", unit: "%p", ids: ["sgb_aaa_5y", "sgb_aaa_10y", "corp_aam_3y", "corp_aam_10y"] },
 ];
 const monthEndLabel = (iso) => (iso ? `'${iso.slice(2, 4)}.${Number(iso.slice(5, 7))}末` : "–");
 const dayLabel = (iso) => (iso ? `${Number(iso.slice(5, 7))}.${Number(iso.slice(8, 10))}` : "–");
@@ -334,11 +333,11 @@ function fmtRptDelta(kind, cur, base) {
   if (kind === "rate" || kind === "bp") {
     const d = kind === "rate" ? (cur - base) * 100 : cur - base;
     const r = Math.round(d);
-    return { text: r === 0 ? "0bp" : r > 0 ? `+${r}bp` : `△${Math.abs(r)}bp`, color: colorOf(d) };
+    return { text: r === 0 ? "–" : r > 0 ? `+${r}bp` : `△${Math.abs(r)}bp`, color: colorOf(d) };
   }
   const pct = base !== 0 ? (cur / base - 1) * 100 : 0;
   const r = pct;
-  return { text: Math.abs(r) < 0.05 ? "0%" : r > 0 ? `+${r.toFixed(1)}%` : `△${Math.abs(r).toFixed(1)}%`, color: colorOf(r) };
+  return { text: Math.abs(r) < 0.05 ? "–" : r > 0 ? `+${r.toFixed(1)}%` : `△${Math.abs(r).toFixed(1)}%`, color: colorOf(r) };
 }
 
 /* ---- 대시보드(보고서 양식) 표 ---- */
@@ -374,24 +373,52 @@ function Dashboard({ data, datesByInd, currentDate, refs }) {
     return valueAt(id, prev);
   };
   if (!refs) return null;
-  // 레벨 컬럼: 연말 → 월말 → 전일 → 현재 (오래된 것 → 최신, 사내 보고서 순서)
-  const lvlCols = [
-    { key: "y23", title: "'23末", date: refs.y23 },
-    { key: "y24", title: "'24末", date: refs.y24 },
-    { key: "y25", title: "'25末", date: refs.y25 },
-    { key: "m3", title: monthEndLabel(refs.m3), date: refs.m3 },
-    { key: "m2", title: monthEndLabel(refs.m2), date: refs.m2 },
-    { key: "m1", title: monthEndLabel(refs.m1), date: refs.m1 },
-    { key: "prevDay", title: dayLabel(refs.prevDay), date: refs.prevDay },
-    { key: "cur", title: dayLabel(currentDate), date: currentDate, cur: true },
+  // 컬럼 그룹: 현재(금일+전일比/전월比/전분기比/전년比) → 최근(전일/2일전/3일전) → 연말 (메일과 동일)
+  const groups = [
+    { label: "현재", cols: [
+      { key: "cur", cur: true, title: "현재" },
+      { key: "d", delta: true, title: "전일比" },
+      { key: "mom", delta: true, title: "전월比", date: refs.m1 },
+      { key: "qoq", delta: true, title: "전분기比", date: refs.prevQ },
+      { key: "yoy", delta: true, title: "전년比", date: refs.prevYear },
+    ]},
+    { label: "최근", cols: [
+      { key: "prevDay", title: "전일", date: refs.prevDay },
+      { key: "d2", title: "2일전", date: refs.d2 },
+      { key: "d3", title: "3일전", date: refs.d3 },
+    ]},
+    { label: "연말", cols: [
+      { key: "y23", title: "'23末", date: refs.y23 },
+      { key: "y24", title: "'24末", date: refs.y24 },
+      { key: "y25", title: "'25末", date: refs.y25 },
+    ]},
   ];
-  // 증감 컬럼
-  const deltaCols = [
-    { key: "d", title: "전일比" },
-    { key: "mom", title: "전월比", date: refs.m1 },
-    { key: "qoq", title: "전분기比", date: refs.prevQ },
-    { key: "yoy", title: "전년比", date: refs.prevYear },
-  ];
+  const md = (iso) => (iso ? `${Number(iso.slice(5, 7))}/${Number(iso.slice(8, 10))}` : "–");
+  const period = refs.spark && refs.spark.length ? `${md(refs.spark[0])}~${md(currentDate)}` : "";
+  const pfx = (s) => s.split(" ")[0];
+  // 선 스킴(메일과 동일)
+  const THIN = "1px solid #dfe2e7", GRP = "2px solid #7a818d", SECTL = "2px solid #7a818d", SUB = "2px solid #8a909c", OUT = "2.5px solid #5b626d", HB = "2px solid #7a818d";
+  const pad = "6px 10px";
+  const hbase = { background: "#fff", color: "#2a2f3a", whiteSpace: "nowrap", padding: pad, border: THIN, fontWeight: 700, fontSize: 12 };
+  const hSpan = { ...hbase, borderBottom: HB };
+  const hGroupCell = { ...hbase, borderBottom: THIN };
+  const hColCell = { ...hbase, borderBottom: HB, fontWeight: 600 };
+  const catCell = { padding: pad, border: THIN, background: "#f6f7f9", fontWeight: 700, fontSize: 12, textAlign: "center", verticalAlign: "middle", whiteSpace: "nowrap" };
+  const catSub = { fontWeight: 400, fontSize: 10 };
+  const nameCell = { padding: pad, border: THIN, textAlign: "left", fontSize: 13, fontWeight: 600, whiteSpace: "nowrap" };
+  const numCell = { padding: pad, border: THIN, textAlign: "right", fontSize: 13, whiteSpace: "nowrap" };
+  const sparkSvg = (id) => {
+    const vals = refs.spark.map((d) => valAsOf(id, d));
+    const pts = vals.map((v, i) => [i, v]).filter((p) => p[1] != null);
+    if (pts.length < 2) return <span style={{ color: T.flat }}>–</span>;
+    const ys = pts.map((p) => p[1]), mn = Math.min(...ys), mx = Math.max(...ys), span = mx - mn || 1;
+    const W = 72, H = 18, step = vals.length > 1 ? W / (vals.length - 1) : 0;
+    const xy = pts.map(([i, v]) => [i * step, H - 2 - ((v - mn) / span) * (H - 4)]);
+    const poly = xy.map((p) => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ");
+    const tr = ys[ys.length - 1] > ys[0] ? T.up : ys[ys.length - 1] < ys[0] ? T.down : T.flat;
+    const last = xy[xy.length - 1];
+    return <svg width={W} height={H} style={{ display: "block", margin: "0 auto" }}><polyline points={poly} fill="none" stroke={tr} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /><circle cx={last[0].toFixed(1)} cy={last[1].toFixed(1)} r="2" fill={tr} /></svg>;
+  };
   return (
     <div className="report">
       <h2 className="report-print-title" style={S.printTitle}>거시경제지표 현황 (기준일 {currentDate})</h2>
@@ -411,33 +438,50 @@ function Dashboard({ data, datesByInd, currentDate, refs }) {
         )}
       </div>
       <div style={S.tableWrap}>
-        <table style={S.rtable} className="report-table">
-          <thead>
-            <tr>
-              <th style={{ ...S.rth, ...S.rthCat }} colSpan={2}>분류 / 지표</th>
-              {lvlCols.map((c, i) => <th key={c.key} style={{ ...S.rth, ...S.rthNum, ...(c.cur ? S.rthCur : {}), ...(i === 0 ? S.groupSep : {}) }} title={c.date || "데이터 없음"}>{c.title}</th>)}
-              {deltaCols.map((c, i) => <th key={c.key} style={{ ...S.rth, ...S.rthDelta, ...(i === 0 ? S.groupSep : {}) }}>{c.title}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {SECTIONS.map((sec) => sec.ids.map((id, ri) => {
-              const it = ITEM_BY_ID[id]; if (!it) return null;
-              const kind = it.kind;
-              const cur = valAsOf(id, currentDate);
-              return (
-                <tr key={id}>
-                  {ri === 0 && <td rowSpan={sec.ids.length} style={{ ...S.rtd, ...S.rtdCat }}>{sec.label}</td>}
-                  <td style={{ ...S.rtd, ...S.rtdName }}>{it.label}</td>
-                  {lvlCols.map((c, i) => <td key={c.key} style={{ ...S.rtd, ...S.rtdNum, ...(c.cur ? S.rtdCur : {}), ...(i === 0 ? S.groupSep : {}) }}>{fmtLevel(kind, valAsOf(id, c.date))}</td>)}
-                  {deltaCols.map((c, i) => { const base = c.key === "d" ? prevObsVal(id, currentDate) : valAsOf(id, c.date); const d = fmtRptDelta(kind, cur, base);
-                    return <td key={c.key} style={{ ...S.rtd, ...S.rtdDelta, ...(i === 0 ? S.groupSep : {}), color: d.color, fontWeight: 600 }}>{d.text}</td>; })}
-                </tr>
-              );
-            }))}
-          </tbody>
-        </table>
+        <div style={{ display: "inline-block", border: OUT }}>
+          <table style={{ borderCollapse: "collapse", fontFamily: sans, fontVariantNumeric: "tabular-nums" }} className="report-table">
+            <thead>
+              <tr>
+                <th rowSpan={2} style={hSpan}>분류</th>
+                <th rowSpan={2} style={{ ...hSpan, borderLeft: GRP }}>지표</th>
+                {groups.map((g) => <th key={g.label} colSpan={g.cols.length} style={{ ...hGroupCell, borderLeft: GRP }}>{g.label}</th>)}
+                <th rowSpan={2} style={{ ...hSpan, borderLeft: THIN }}>추세<br /><span style={{ fontWeight: 400, fontSize: 10, color: "#8a909c" }}>{period}</span></th>
+              </tr>
+              <tr>
+                {groups.flatMap((g) => g.cols.map((c, i) => <th key={c.key} style={{ ...hColCell, ...(i === 0 ? { borderLeft: GRP } : {}) }}>{c.title}</th>))}
+              </tr>
+            </thead>
+            <tbody>
+              {SECTIONS.map((sec) => {
+                const secAsOf = sec.ids.reduce((mx, id) => { const d = asOfDateFor(id, currentDate); return d && (!mx || d > mx) ? d : mx; }, null);
+                return sec.ids.map((id, ri) => {
+                  const it = ITEM_BY_ID[id]; if (!it) return null;
+                  const kind = it.kind, cur = valAsOf(id, currentDate);
+                  const isSub = ri > 0 && pfx(it.label) !== pfx(ITEM_BY_ID[sec.ids[ri - 1]].label) && (it.label.startsWith("유럽") || it.label.startsWith("회사채"));
+                  const sTop = ri === 0 ? { borderTop: SECTL } : isSub ? { borderTop: SUB } : {};
+                  return (
+                    <tr key={id}>
+                      {ri === 0 && <td rowSpan={sec.ids.length} style={{ ...catCell, borderTop: SECTL }}>{sec.label}<br /><span style={{ ...catSub, color: "#7a818d" }}>(단위:{sec.unit})</span><br /><span style={{ ...catSub, color: "#9aa0ab" }}>* 기준 {md(secAsOf)}</span></td>}
+                      <td style={{ ...nameCell, borderLeft: GRP, ...sTop }}>{it.label}</td>
+                      {groups.flatMap((g) => g.cols.map((c, ci) => {
+                        const gl = ci === 0 ? { borderLeft: GRP } : {};
+                        if (c.delta) {
+                          const base = c.key === "d" ? prevObsVal(id, currentDate) : valAsOf(id, c.date);
+                          const dd = fmtRptDelta(kind, cur, base);
+                          return <td key={c.key} style={{ ...numCell, ...gl, ...sTop, color: dd.color, fontWeight: 600 }}>{dd.text}</td>;
+                        }
+                        return <td key={c.key} style={{ ...numCell, ...gl, ...sTop, ...(c.cur ? { background: "#eef4fb", fontWeight: 700 } : {}) }}>{fmtLevel(kind, c.cur ? cur : valAsOf(id, c.date))}</td>;
+                      }))}
+                      <td style={{ padding: "2px 6px", border: THIN, textAlign: "center", whiteSpace: "nowrap", ...sTop }}>{sparkSvg(id)}</td>
+                    </tr>
+                  );
+                });
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
-      <p style={S.rptNote} className="no-print">레벨: 금리·스프레드 %, 환율 원, 주가 pt/원 · 증감: 금리·스프레드 bp, 환율·주가 % · 하락 △ · 발표지연 지표는 기준일 시점 최신 가용값(as-of)</p>
+      <p style={S.rptNote} className="no-print">레벨: 금리·스프레드 %, 환율 원, 주가 pt/원 · 증감: 금리·스프레드 bp, 환율·주가 % · 상승 +/적색, 하락 △/청색 · 추세선 = 최근 {refs.spark.length}영업일 · 분류별 ‘기준’은 해당 데이터 일자(as-of)</p>
     </div>
   );
 }
