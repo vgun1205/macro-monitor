@@ -486,49 +486,84 @@ function EditPanel({ data, sortedDates, pushRows, deleteDates }) {
   );
 }
 
+/* 평가사/엑셀 헤더 → 지표 id 자동 매핑 (채권종류 + 만기 키워드). 없으면 STORABLE id/label 매칭. */
+const STORABLE_BYLABEL = Object.fromEntries(STORABLE.map((i) => [i.label.replace(/\s/g, ""), i.id]));
+const LABEL_OF = Object.fromEntries(STORABLE.map((i) => [i.id, i.label]));
+const dateRe = /(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/;
+function mapHeaderToId(combined) {
+  const s = (combined || "").replace(/\s/g, "");
+  if (!s) return null;
+  if (STORABLE.find((x) => x.id === s)) return s;
+  if (STORABLE_BYLABEL[s]) return STORABLE_BYLABEL[s];
+  const my = s.match(/(\d+)\s*(?:년|y)/i);
+  const mat = my ? Number(my[1]) : null;
+  if (/특수채|공사채|공단채|AAA/.test(s)) {
+    if (mat === 5) return "sgbAAA5yYld";
+    if (mat === 10) return "sgbAAA10yYld";
+  }
+  if (/회사채|무보증|AA-|AA−/.test(s)) {
+    if (mat === 3) return "corpAA3yYield";
+    if (mat === 10) return "corpAA10yYld";
+  }
+  if (/국고|국채/.test(s)) {
+    if (mat === 3) return "ktb3y"; if (mat === 5) return "ktb5y"; if (mat === 10) return "ktb10y";
+    if (mat === 20) return "ktb20y"; if (mat === 30) return "ktb30y";
+  }
+  if (/달러|usd/i.test(s)) return "usdkrw";
+  if (/유로|eur/i.test(s)) return "eurkrw";
+  if (/코스피|kospi/i.test(s)) return "kospi";
+  if (/삼성/i.test(s)) return "samsung";
+  return null;
+}
+
 /* ---- 가져오기 / 내보내기 ---- */
 function ImportPanel({ data, pushRows }) {
   const [text, setText] = useState("");
   const [msg, setMsg] = useState("");
-  const headerOrder = ["날짜", ...STORABLE.map((i) => i.id)];
+  const [preview, setPreview] = useState(null); // { rows, mapping }
 
-  const copyTemplate = async () => {
-    try { await navigator.clipboard.writeText(headerOrder.join("\t")); setMsg("헤더(컬럼 순서)를 복사했습니다."); }
-    catch { setMsg("복사 실패 — 헤더: " + headerOrder.join("\t")); }
-  };
-  const doImport = () => {
+  const parse = () => {
+    setPreview(null);
     try {
-      const lines = text.trim().split(/\r?\n/).filter((l) => l.trim());
-      if (lines.length < 2) { setMsg("헤더 1행 + 데이터 1행 이상 필요"); return; }
+      const lines = text.split(/\r?\n/).filter((l) => l.trim());
+      if (lines.length < 2) { setMsg("헤더 + 데이터 행이 필요합니다."); return; }
       const delim = lines[0].includes("\t") ? "\t" : ",";
-      const headers = lines[0].split(delim).map((h) => h.trim());
-      const byLabel = Object.fromEntries(STORABLE.map((i) => [i.label.replace(/\s/g, ""), i.id]));
-      const colIds = headers.map((h) => {
-        if (h === "날짜" || h.toLowerCase() === "date") return "__date";
-        if (STORABLE.find((s) => s.id === h)) return h;
-        return byLabel[h.replace(/\s/g, "")] || null;
-      });
-      const di = colIds.indexOf("__date");
-      if (di < 0) { setMsg("‘날짜’ 컬럼을 찾지 못했습니다."); return; }
-      const out = [];
-      for (let i = 1; i < lines.length; i++) {
-        const cells = lines[i].split(delim);
-        let date = (cells[di] || "").trim().replace(/[/.]/g, "-");
-        const m = date.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
-        if (!m) continue;
-        date = `${m[1]}-${pad(+m[2])}-${pad(+m[3])}`;
-        cells.forEach((c, ci) => {
-          const id = colIds[ci];
-          if (!id || id === "__date") return;
-          const v = parseFloat(String(c).replace(/,/g, "").trim());
-          if (!isNaN(v)) out.push({ date, indicator: id, value: v });
-        });
+      const grid = lines.map((l) => l.split(delim).map((c) => c.trim()));
+      const firstData = grid.findIndex((r) => r.some((c) => dateRe.test(c)));
+      if (firstData < 1) { setMsg("날짜 행을 찾지 못했습니다. (헤더 + YYYY-MM-DD 날짜 필요)"); return; }
+      const ncol = Math.max(...grid.map((r) => r.length));
+      const combined = [];
+      for (let c = 0; c < ncol; c++) combined[c] = grid.slice(0, firstData).map((r) => r[c] || "").join("");
+      const dateCol = grid[firstData].findIndex((c) => dateRe.test(c));
+      const mapping = [];
+      for (let c = 0; c < ncol; c++) {
+        if (c === dateCol) continue;
+        const id = mapHeaderToId(combined[c]);
+        if (id) mapping.push({ col: c, id, header: combined[c] });
       }
-      pushRows(out);
-      setText(""); setMsg(`완료 — ${out.length}개 값 반영.`);
+      if (!mapping.length) { setMsg("인식된 지표 컬럼이 없습니다. 헤더에 '특수채 AAA 10년'처럼 종목·만기가 있어야 합니다."); return; }
+      const out = [];
+      for (let i = firstData; i < grid.length; i++) {
+        const dm = (grid[i][dateCol] || "").match(dateRe);
+        if (!dm) continue;
+        const date = `${dm[1]}-${pad(+dm[2])}-${pad(+dm[3])}`;
+        for (const m of mapping) {
+          const v = parseFloat(String(grid[i][m.col] || "").replace(/,/g, ""));
+          if (!isNaN(v)) out.push({ date, indicator: m.id, value: v });
+        }
+      }
+      setPreview({ rows: out, mapping });
+      setMsg(`인식: ${mapping.length}개 지표 · ${out.length}개 값. 매핑 확인 후 '가져오기 실행'.`);
     } catch (e) { setMsg("오류: " + e.message); }
   };
+  const apply = () => {
+    if (!preview || !preview.rows.length) { setMsg("먼저 '미리보기'로 분석하세요."); return; }
+    pushRows(preview.rows);
+    setMsg(`완료 — ${preview.rows.length}개 값 반영.`);
+    setText(""); setPreview(null);
+  };
   const exportCSV = () => {
+    const headerOrder = ["날짜", ...STORABLE.map((i) => i.id)];
     const dates = Object.keys(data).sort();
     const head = headerOrder.join(",");
     const body = dates.map((d) => [d, ...STORABLE.map((i) => data[d]?.[i.id] ?? "")].join(",")).join("\n");
@@ -539,15 +574,29 @@ function ImportPanel({ data, pushRows }) {
   return (
     <div style={{ display: "grid", gap: 16 }}>
       <section style={S.card}>
-        <div style={S.cardHead}><h2 style={S.cardTitle}>엑셀에서 붙여넣기 가져오기</h2></div>
+        <div style={S.cardHead}><h2 style={S.cardTitle}>평가사 / 엑셀 붙여넣기 가져오기</h2></div>
         <div style={{ padding: "0 18px 18px" }}>
-          <p style={S.hint}>1행=헤더(날짜 + 지표), 2행부터 일자별 값. 탭/콤마 인식, 같은 날짜는 덮어씁니다.</p>
+          <p style={S.hint}>
+            채권시가평가 포털의 <b>엑셀(또는 화면)을 그대로 복사해 붙여넣고</b> ‘미리보기 → 가져오기 실행’.
+            헤더가 여러 줄(채권종류/만기/5사평균)이어도 자동 인식하며 <b>날짜 + 종목·만기</b>로 컬럼을 매핑합니다.
+            예: ‘특수채 AAA 10년’→특수채 AAA 10Y, ‘회사채 AA- 10년’→회사채 AA- 10Y. 같은 날짜는 덮어씁니다.
+          </p>
           <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
-            <button onClick={copyTemplate} style={S.btnPrimary}>헤더 복사</button>
-            <button onClick={doImport} style={S.btnPrimary}>가져오기 실행</button>
+            <button onClick={parse} style={S.btnPrimary}>미리보기(분석)</button>
+            <button onClick={apply} style={{ ...S.btnPrimary, opacity: preview ? 1 : 0.5 }} disabled={!preview}>가져오기 실행</button>
           </div>
-          <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder={"날짜\tktb3y\tktb5y\t...\n2026-06-12\t2.49\t2.58\t..."} style={S.textarea} />
+          <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder={"일자\t특수채AAA 5년\t특수채AAA 10년\t회사채AA- 10년\n2026-06-15\t4.21\t4.31\t5.60\n..."} style={S.textarea} />
           {msg && <div style={S.msg}>{msg}</div>}
+          {preview && (
+            <div style={{ marginTop: 10, fontSize: 12.5 }}>
+              <b>매핑 미리보기</b>
+              <ul style={{ margin: "6px 0 0", paddingLeft: 18, lineHeight: 1.7 }}>
+                {preview.mapping.map((m) => (
+                  <li key={m.col}><span style={{ color: T.inkSoft }}>{m.header || `열 ${m.col + 1}`}</span> → <b>{LABEL_OF[m.id] || m.id}</b></li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       </section>
       <section style={S.card}>
