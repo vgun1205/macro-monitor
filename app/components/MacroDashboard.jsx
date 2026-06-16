@@ -37,13 +37,19 @@ const GROUPS = [
   { id: "equity", label: "주가", unit: "pt / 원", items: [
     { id: "kospi", label: "코스피", kind: "idx" }, { id: "samsung", label: "삼성전자", kind: "won" },
   ]},
+  // 평가사 수익률(특수채AAA·회사채AA−). 회사채AA−3Y는 ECOS 자동, 나머지는 수기.
+  { id: "rates_credit", label: "금리 · 신용 (평가사)", unit: "%", items: [
+    { id: "sgbAAA5yYld", label: "특수채 AAA 5Y", kind: "rate" }, { id: "sgbAAA10yYld", label: "특수채 AAA 10Y", kind: "rate" },
+    { id: "corpAA3yYield", label: "회사채 AA− 3Y", kind: "rate" }, { id: "corpAA10yYld", label: "회사채 AA− 10Y", kind: "rate" },
+  ]},
+  // 스프레드 = 평가사수익률 − 국고채(동일만기), bp 환산
   { id: "spread_sgb", label: "스프레드 · 특수채 AAA (대 국고)", unit: "bp", items: [
-    { id: "sgb_aaa_5y", label: "특수채 AAA 5Y", kind: "bp" }, { id: "sgb_aaa_10y", label: "특수채 AAA 10Y", kind: "bp" },
+    { id: "sgb_aaa_5y", label: "특수채 AAA 5Y", kind: "bp", from: ["sgbAAA5yYld", "ktb5y"] },
+    { id: "sgb_aaa_10y", label: "특수채 AAA 10Y", kind: "bp", from: ["sgbAAA10yYld", "ktb10y"] },
   ]},
   { id: "spread_corp", label: "스프레드 · 회사채 AA− (대 국고)", unit: "bp", items: [
-    // 3Y 스프레드 = (ECOS 회사채AA-3년 수익률) − (국고채 3Y), bp 환산
     { id: "corp_aam_3y", label: "회사채 AA− 3Y", kind: "bp", from: ["corpAA3yYield", "ktb3y"] },
-    { id: "corp_aam_10y", label: "회사채 AA− 10Y", kind: "bp" },
+    { id: "corp_aam_10y", label: "회사채 AA− 10Y", kind: "bp", from: ["corpAA10yYld", "ktb10y"] },
   ]},
 ];
 const ALL_ITEMS = GROUPS.flatMap((g) => g.items);
@@ -59,10 +65,10 @@ const STORABLE = [
   { id: "eu10y", label: "유럽 10Y", mode: "auto" }, { id: "eu20y", label: "유럽 20Y", mode: "auto" },
   { id: "usdkrw", label: "원/달러", mode: "auto" }, { id: "eurkrw", label: "원/유로", mode: "auto" },
   { id: "kospi", label: "코스피", mode: "auto" }, { id: "samsung", label: "삼성전자", mode: "auto" },
-  { id: "corpAA3yYield", label: "회사채 AA- 3년 수익률(%)", mode: "auto" },
-  { id: "sgb_aaa_5y", label: "특수채 AAA 5Y 스프레드(bp)", mode: "manual" },
-  { id: "sgb_aaa_10y", label: "특수채 AAA 10Y 스프레드(bp)", mode: "manual" },
-  { id: "corp_aam_10y", label: "회사채 AA- 10Y 스프레드(bp)", mode: "manual" },
+  { id: "corpAA3yYield", label: "회사채 AA- 3Y 수익률(%)", mode: "auto" },
+  { id: "sgbAAA5yYld", label: "특수채 AAA 5Y 수익률(%)", mode: "manual" },
+  { id: "sgbAAA10yYld", label: "특수채 AAA 10Y 수익률(%)", mode: "manual" },
+  { id: "corpAA10yYld", label: "회사채 AA- 10Y 수익률(%)", mode: "manual" },
 ];
 
 /* ---- 날짜 유틸 ---- */
@@ -221,8 +227,12 @@ export default function MacroDashboard() {
   }, [data, sortedDates]);
 
   useEffect(() => {
-    if (sortedDates.length && (!currentDate || !data[currentDate])) setCurrentDate(sortedDates[sortedDates.length - 1]);
-  }, [sortedDates, currentDate, data]);
+    if (sortedDates.length && (!currentDate || !data[currentDate])) {
+      // 기준일 기본값 = 국고채 최신 발표일(환율·주가만 갱신된 날엔 채권 기준일로)
+      const anc = datesByInd["ktb10y"];
+      setCurrentDate(anc && anc.length ? anc[anc.length - 1] : sortedDates[sortedDates.length - 1]);
+    }
+  }, [sortedDates, currentDate, data, datesByInd]);
 
   const refs = useMemo(() => {
     if (!currentDate) return null;
@@ -300,6 +310,7 @@ const SECTIONS = [
   { label: "금리 · 해외", ids: ["ust5y", "ust10y", "ust20y", "ust30y", "eu10y", "eu20y"] },
   { label: "환율", ids: ["usdkrw", "eurkrw"] },
   { label: "주가", ids: ["kospi", "samsung"] },
+  { label: "금리 · 신용", ids: ["sgbAAA5yYld", "sgbAAA10yYld", "corpAA3yYield", "corpAA10yYld"] },
   { label: "스프레드 · 신용", ids: ["sgb_aaa_5y", "sgb_aaa_10y", "corp_aam_3y", "corp_aam_10y"] },
 ];
 const monthEndLabel = (iso) => (iso ? `'${iso.slice(2, 4)}.${Number(iso.slice(5, 7))}末` : "–");
