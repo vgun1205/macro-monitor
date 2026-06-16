@@ -55,6 +55,16 @@ const GROUPS = [
 const ALL_ITEMS = GROUPS.flatMap((g) => g.items);
 const ITEM_BY_ID = Object.fromEntries(ALL_ITEMS.map((i) => [i.id, i]));
 
+/* 바로가기 링크(메일과 동일) */
+const QUICK_LINKS = [
+  ["📊", "전자공시 DART", "https://dart.fss.or.kr"],
+  ["⚖️", "국가법령정보", "https://www.law.go.kr"],
+  ["🏦", "한국은행 ECOS", "https://ecos.bok.or.kr"],
+  ["📑", "채권정보 KOFIA", "https://www.kofiabond.or.kr"],
+  ["🌐", "국제금융센터", "https://www.kcif.or.kr"],
+  ["📰", "경제뉴스(한경)", "https://markets.hankyung.com"],
+];
+
 /* ---- 저장 가능한(수집/수기) 항목: 편집·가져오기·내보내기 대상 ---- */
 const STORABLE = [
   { id: "ktb3y", label: "국고채 3Y", mode: "auto" }, { id: "ktb5y", label: "국고채 5Y", mode: "auto" },
@@ -436,6 +446,12 @@ function Dashboard({ data, datesByInd, currentDate, refs }) {
             </p>
           </div>
         )}
+      </div>
+      <div className="no-print" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+        {QUICK_LINKS.map(([ic, label, url]) => (
+          <a key={url} href={url} target="_blank" rel="noopener noreferrer"
+            style={{ padding: "7px 12px", background: "#fff", border: `1px solid ${T.line}`, borderRadius: 8, color: T.ink, textDecoration: "none", fontSize: 12.5, fontWeight: 600 }}>{ic} {label}</a>
+        ))}
       </div>
       <div style={S.tableWrap}>
         <div style={{ display: "inline-block", border: OUT }}>
