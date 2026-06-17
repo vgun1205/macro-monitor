@@ -43,7 +43,8 @@ export async function GET(req) {
   const secret = process.env.CRON_SECRET;
   if (secret) {
     const auth = req.headers.get("authorization") || "";
-    if (auth !== `Bearer ${secret}`) {
+    const key = new URL(req.url).searchParams.get("key") || ""; // URL 쿼리 인증(헤더 없이도 OK)
+    if (auth !== `Bearer ${secret}` && key !== secret) {
       return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }
   }
