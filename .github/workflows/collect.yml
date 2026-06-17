@@ -1,13 +1,9 @@
 name: collect-and-send
 
-# 평일 09:00·13:00·17:00 KST 발송. 주말/공휴일은 라우트에서 발송 스킵.
-# (Vercel Hobby cron은 정시 보장이 안 돼 새벽에 도는 문제로, 3회 모두 GitHub Actions로 통일)
+# 정시 발송(평일 09·13·17시 KST)은 cron-job.org가 담당(정확도 위해).
+# 여기 schedule은 제거하고, 필요 시 수동 실행만 남김(중복 발송 방지).
 on:
-  schedule:
-    - cron: "0 0 * * 1-5"   # 09:00 KST (00:00 UTC)
-    - cron: "0 4 * * 1-5"   # 13:00 KST (04:00 UTC)
-    - cron: "0 8 * * 1-5"   # 17:00 KST (08:00 UTC)
-  workflow_dispatch: {}     # 수동 실행(테스트)
+  workflow_dispatch: {}     # 수동 실행 전용
 
 jobs:
   trigger:
