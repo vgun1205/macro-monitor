@@ -36,6 +36,8 @@ const GROUPS = [
   ]},
   { id: "equity", label: "주가", unit: "pt / 원", items: [
     { id: "kospi", label: "코스피", kind: "idx" }, { id: "samsung", label: "삼성전자", kind: "won" },
+    { id: "samsungct", label: "삼성물산", kind: "won" }, { id: "skt", label: "SK텔레콤", kind: "won" },
+    { id: "skhynix", label: "SK하이닉스", kind: "won" },
   ]},
   // 평가사 수익률(특수채AAA·회사채AA−). 회사채AA−3Y는 ECOS 자동, 나머지는 수기.
   { id: "rates_credit", label: "금리 · 신용 (평가사)", unit: "%", items: [
@@ -75,6 +77,7 @@ const STORABLE = [
   { id: "eu10y", label: "유럽 10Y", mode: "auto" }, { id: "eu20y", label: "유럽 20Y", mode: "auto" },
   { id: "usdkrw", label: "원/달러", mode: "auto" }, { id: "eurkrw", label: "원/유로", mode: "auto" },
   { id: "kospi", label: "코스피", mode: "auto" }, { id: "samsung", label: "삼성전자", mode: "auto" },
+  { id: "samsungct", label: "삼성물산", mode: "auto" }, { id: "skt", label: "SK텔레콤", mode: "auto" }, { id: "skhynix", label: "SK하이닉스", mode: "auto" },
   { id: "corpAA3yYield", label: "회사채 AA- 3Y 수익률(%)", mode: "auto" },
   { id: "sgbAAA5yYld", label: "특수채 AAA 5Y 수익률(%)", mode: "manual" },
   { id: "sgbAAA10yYld", label: "특수채 AAA 10Y 수익률(%)", mode: "manual" },
@@ -318,7 +321,7 @@ const SECTIONS = [
   { label: "금리 · 국내", unit: "%", ids: ["ktb3y", "ktb5y", "ktb10y", "ktb20y", "ktb30y"] },
   { label: "금리 · 해외", unit: "%", ids: ["ust5y", "ust10y", "ust20y", "ust30y", "eu10y", "eu20y"] },
   { label: "환율", unit: "원", ids: ["usdkrw", "eurkrw"] },
-  { label: "주가", unit: "pt/원", ids: ["kospi", "samsung"] },
+  { label: "주가", unit: "pt/원", ids: ["kospi", "samsung", "samsungct", "skt", "skhynix"] },
   { label: "스프레드 · 신용", unit: "%p", ids: ["sgb_aaa_5y", "sgb_aaa_10y", "corp_aam_3y", "corp_aam_10y"] },
 ];
 const monthEndLabel = (iso) => (iso ? `'${iso.slice(2, 4)}.${Number(iso.slice(5, 7))}末` : "–");
