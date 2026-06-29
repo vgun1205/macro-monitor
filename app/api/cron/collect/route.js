@@ -2,7 +2,7 @@ import { collectRecent } from "../../../../lib/collectors/index.js";
 import { getConfig, setConfig } from "../../../../lib/db.js";
 import { refreshAccessToken, sendMemo } from "../../../../lib/kakao.js";
 import { buildSummary } from "../../../../lib/summary.js";
-import { sendReportMail } from "../../../../lib/mail.js";
+import { sendReportMail, sendIssuesMail } from "../../../../lib/mail.js";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -58,7 +58,13 @@ export async function GET(req) {
     const kakao = await notifyKakao();
     let mail = "skip";
     try { mail = await sendReportMail(mailto || undefined); } catch (e) { mail = `error:${e.message}`; }
-    return Response.json({ ok: true, at: new Date().toISOString(), ...result, kakao, mail });
+    // 경제 이슈·규제 동향(별도 메일): 평일 09시 1회(테스트는 항상)
+    let issuesMail = "skip";
+    const kstHour = new Date(Date.now() + 9 * 3600 * 1000).getUTCHours();
+    if (mailto || kstHour === 9) {
+      try { issuesMail = await sendIssuesMail(mailto || undefined); } catch (e) { issuesMail = `error:${e.message}`; }
+    }
+    return Response.json({ ok: true, at: new Date().toISOString(), ...result, kakao, mail, issuesMail });
   } catch (e) {
     return Response.json({ ok: false, error: e.message }, { status: 500 });
   }
