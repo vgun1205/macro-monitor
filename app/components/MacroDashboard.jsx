@@ -29,6 +29,7 @@ const GROUPS = [
   ]},
   { id: "fx", label: "환율", unit: "원", items: [
     { id: "usdkrw", label: "원/달러 (USD)", kind: "fx" }, { id: "eurkrw", label: "원/유로 (EUR)", kind: "fx" },
+    { id: "jpykrw", label: "원/엔 (100엔)", kind: "fx" },
   ]},
   { id: "spread_us", label: "금리스프레드 · 미국 (장기물 − 10Y)", unit: "bp", items: [
     { id: "us_sp20", label: "미국 20Y − 10Y", kind: "bp", from: ["ust20y", "ust10y"] },
@@ -37,7 +38,7 @@ const GROUPS = [
   { id: "equity", label: "주가", unit: "pt / 원", items: [
     { id: "kospi", label: "코스피", kind: "idx" }, { id: "samsung", label: "삼성전자", kind: "won" },
     { id: "samsungct", label: "삼성물산", kind: "won" }, { id: "skt", label: "SK텔레콤", kind: "won" },
-    { id: "skhynix", label: "SK하이닉스", kind: "won" },
+    { id: "skhynix", label: "SK하이닉스", kind: "won" }, { id: "sksquare", label: "SK스퀘어", kind: "won" },
   ]},
   // 평가사 수익률(특수채AAA·회사채AA−). 회사채AA−3Y는 ECOS 자동, 나머지는 수기.
   { id: "rates_credit", label: "금리 · 신용 (평가사)", unit: "%", items: [
@@ -75,9 +76,9 @@ const STORABLE = [
   { id: "ust5y", label: "미국 5Y", mode: "auto" }, { id: "ust10y", label: "미국 10Y", mode: "auto" },
   { id: "ust20y", label: "미국 20Y", mode: "auto" }, { id: "ust30y", label: "미국 30Y", mode: "auto" },
   { id: "eu10y", label: "유럽 10Y", mode: "auto" }, { id: "eu20y", label: "유럽 20Y", mode: "auto" },
-  { id: "usdkrw", label: "원/달러", mode: "auto" }, { id: "eurkrw", label: "원/유로", mode: "auto" },
+  { id: "usdkrw", label: "원/달러", mode: "auto" }, { id: "eurkrw", label: "원/유로", mode: "auto" }, { id: "jpykrw", label: "원/엔(100엔)", mode: "auto" },
   { id: "kospi", label: "코스피", mode: "auto" }, { id: "samsung", label: "삼성전자", mode: "auto" },
-  { id: "samsungct", label: "삼성물산", mode: "auto" }, { id: "skt", label: "SK텔레콤", mode: "auto" }, { id: "skhynix", label: "SK하이닉스", mode: "auto" },
+  { id: "samsungct", label: "삼성물산", mode: "auto" }, { id: "skt", label: "SK텔레콤", mode: "auto" }, { id: "skhynix", label: "SK하이닉스", mode: "auto" }, { id: "sksquare", label: "SK스퀘어", mode: "auto" },
   { id: "corpAA3yYield", label: "회사채 AA- 3Y 수익률(%)", mode: "auto" },
   { id: "sgbAAA5yYld", label: "특수채 AAA 5Y 수익률(%)", mode: "manual" },
   { id: "sgbAAA10yYld", label: "특수채 AAA 10Y 수익률(%)", mode: "manual" },
@@ -320,8 +321,8 @@ export default function MacroDashboard() {
 const SECTIONS = [
   { label: "금리 · 국내", unit: "%", ids: ["ktb3y", "ktb5y", "ktb10y", "ktb20y", "ktb30y"] },
   { label: "금리 · 해외", unit: "%", ids: ["ust5y", "ust10y", "ust20y", "ust30y", "eu10y", "eu20y"] },
-  { label: "환율", unit: "원", ids: ["usdkrw", "eurkrw"] },
-  { label: "주가", unit: "pt/원", ids: ["kospi", "samsung", "samsungct", "skt", "skhynix"] },
+  { label: "환율", unit: "원", ids: ["usdkrw", "eurkrw", "jpykrw"] },
+  { label: "주가", unit: "pt/원", ids: ["kospi", "samsung", "samsungct", "skt", "skhynix", "sksquare"] },
   { label: "스프레드 · 신용", unit: "%p", ids: ["sgb_aaa_5y", "sgb_aaa_10y", "corp_aam_3y", "corp_aam_10y"] },
 ];
 const monthEndLabel = (iso) => (iso ? `'${iso.slice(2, 4)}.${Number(iso.slice(5, 7))}末` : "–");
