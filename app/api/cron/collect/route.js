@@ -63,8 +63,9 @@ export async function GET(req) {
     // 카카오·거시리포트·이슈메일을 병렬 실행(60초 제한 내 처리)
     const kakaoP = only === "issues" ? Promise.resolve("skip(only=issues)") : notifyKakao().catch((e) => `error:${e.message}`);
     const mailP = only !== "issues" ? sendReportMail(mailto || undefined).catch((e) => `error:${e.message}`) : Promise.resolve("skip");
+    const noAttach = params.get("noatt") === "1"; // 진단용: 첨부 없이 본문만
     const issuesP = (only !== "report" && (mailto || ISSUE_HOURS.includes(kstHour)))
-      ? sendIssuesMail(mailto || undefined).catch((e) => `error:${e.message}`) : Promise.resolve("skip");
+      ? sendIssuesMail(mailto || undefined, { noAttach }).catch((e) => `error:${e.message}`) : Promise.resolve("skip");
     const [kakao, mail, issuesMail] = await Promise.all([kakaoP, mailP, issuesP]);
     return Response.json({ ok: true, at: new Date().toISOString(), ...result, kakao, mail, issuesMail });
   } catch (e) {
