@@ -62,10 +62,11 @@ export async function GET(req) {
     if (only !== "issues") {
       try { mail = await sendReportMail(mailto || undefined); } catch (e) { mail = `error:${e.message}`; }
     }
-    // 경제 이슈·규제 동향(별도 메일): 평일 09시 1회(테스트는 항상)
+    // 경제 이슈·규제 동향(별도 메일): 평일 09시·17시 2회(테스트는 항상)
+    const ISSUE_HOURS = [9, 17];
     let issuesMail = "skip";
     const kstHour = new Date(Date.now() + 9 * 3600 * 1000).getUTCHours();
-    if (only !== "report" && (mailto || kstHour === 9)) {
+    if (only !== "report" && (mailto || ISSUE_HOURS.includes(kstHour))) {
       try { issuesMail = await sendIssuesMail(mailto || undefined); } catch (e) { issuesMail = `error:${e.message}`; }
     }
     return Response.json({ ok: true, at: new Date().toISOString(), ...result, kakao, mail, issuesMail });
