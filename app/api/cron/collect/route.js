@@ -50,18 +50,22 @@ export async function GET(req) {
   }
   try {
     const result = await collectRecent(10);
-    const mailto = new URL(req.url).searchParams.get("mailto"); // 테스트 수신자 오버라이드(있으면 항상 발송)
+    const params = new URL(req.url).searchParams;
+    const mailto = params.get("mailto"); // 테스트 수신자 오버라이드(있으면 항상 발송)
+    const only = params.get("only"); // "issues" | "report" — 테스트 시 한 종류만 발송
     // 주말·공휴일엔 수집만 하고 발송은 생략(테스트 제외)
     if (!mailto && !isSendDay()) {
       return Response.json({ ok: true, at: new Date().toISOString(), ...result, kakao: "skip(휴일/주말)", mail: "skip(휴일/주말)" });
     }
-    const kakao = await notifyKakao();
+    const kakao = only === "issues" ? "skip(only=issues)" : await notifyKakao();
     let mail = "skip";
-    try { mail = await sendReportMail(mailto || undefined); } catch (e) { mail = `error:${e.message}`; }
+    if (only !== "issues") {
+      try { mail = await sendReportMail(mailto || undefined); } catch (e) { mail = `error:${e.message}`; }
+    }
     // 경제 이슈·규제 동향(별도 메일): 평일 09시 1회(테스트는 항상)
     let issuesMail = "skip";
     const kstHour = new Date(Date.now() + 9 * 3600 * 1000).getUTCHours();
-    if (mailto || kstHour === 9) {
+    if (only !== "report" && (mailto || kstHour === 9)) {
       try { issuesMail = await sendIssuesMail(mailto || undefined); } catch (e) { issuesMail = `error:${e.message}`; }
     }
     return Response.json({ ok: true, at: new Date().toISOString(), ...result, kakao, mail, issuesMail });
