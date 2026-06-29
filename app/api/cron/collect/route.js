@@ -57,8 +57,8 @@ export async function GET(req) {
     if (!mailto && !isSendDay()) {
       return Response.json({ ok: true, at: new Date().toISOString(), ...result, kakao: "skip(휴일/주말)", mail: "skip(휴일/주말)" });
     }
-    // 경제 이슈·규제 동향(별도 메일): 평일 09시·17시 2회(테스트는 항상)
-    const ISSUE_HOURS = [9, 17];
+    // 경제 이슈·규제 동향(별도 메일): 평일 09시 1회(테스트는 항상)
+    const ISSUE_HOURS = [9];
     const kstHour = new Date(Date.now() + 9 * 3600 * 1000).getUTCHours();
     // 카카오·거시리포트·이슈메일을 병렬 실행(60초 제한 내 처리)
     const kakaoP = only === "issues" ? Promise.resolve("skip(only=issues)") : notifyKakao().catch((e) => `error:${e.message}`);
