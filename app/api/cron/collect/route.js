@@ -57,18 +57,15 @@ export async function GET(req) {
     if (!mailto && !isSendDay()) {
       return Response.json({ ok: true, at: new Date().toISOString(), ...result, kakao: "skip(휴일/주말)", mail: "skip(휴일/주말)" });
     }
-    const kakao = only === "issues" ? "skip(only=issues)" : await notifyKakao();
-    let mail = "skip";
-    if (only !== "issues") {
-      try { mail = await sendReportMail(mailto || undefined); } catch (e) { mail = `error:${e.message}`; }
-    }
     // 경제 이슈·규제 동향(별도 메일): 평일 09시·17시 2회(테스트는 항상)
     const ISSUE_HOURS = [9, 17];
-    let issuesMail = "skip";
     const kstHour = new Date(Date.now() + 9 * 3600 * 1000).getUTCHours();
-    if (only !== "report" && (mailto || ISSUE_HOURS.includes(kstHour))) {
-      try { issuesMail = await sendIssuesMail(mailto || undefined); } catch (e) { issuesMail = `error:${e.message}`; }
-    }
+    // 카카오·거시리포트·이슈메일을 병렬 실행(60초 제한 내 처리)
+    const kakaoP = only === "issues" ? Promise.resolve("skip(only=issues)") : notifyKakao().catch((e) => `error:${e.message}`);
+    const mailP = only !== "issues" ? sendReportMail(mailto || undefined).catch((e) => `error:${e.message}`) : Promise.resolve("skip");
+    const issuesP = (only !== "report" && (mailto || ISSUE_HOURS.includes(kstHour)))
+      ? sendIssuesMail(mailto || undefined).catch((e) => `error:${e.message}`) : Promise.resolve("skip");
+    const [kakao, mail, issuesMail] = await Promise.all([kakaoP, mailP, issuesP]);
     return Response.json({ ok: true, at: new Date().toISOString(), ...result, kakao, mail, issuesMail });
   } catch (e) {
     return Response.json({ ok: false, error: e.message }, { status: 500 });
