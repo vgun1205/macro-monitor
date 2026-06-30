@@ -1,9 +1,9 @@
 import "./globals.css";
 
 export const metadata = {
-  title: "거시지표 일별 모니터",
+  title: "RM Native",
   description: "Rates · FX · Credit · Equity daily monitor",
-  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "거시모니터" },
+  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "RM Native" },
   icons: { icon: "/favicon-32.png", apple: "/apple-touch-icon.png" },
 };
 

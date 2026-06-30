@@ -1,8 +1,8 @@
 // PWA 매니페스트 (Next App Router가 /manifest.webmanifest 로 자동 제공)
 export default function manifest() {
   return {
-    name: "거시지표 일별 모니터",
-    short_name: "거시모니터",
+    name: "RM Native",
+    short_name: "RM Native",
     description: "국내·해외 금리·환율·신용스프레드·주가 일별 모니터",
     start_url: "/",
     scope: "/",
