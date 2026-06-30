@@ -49,8 +49,12 @@ export async function GET(req) {
     }
   }
   try {
-    const result = await collectRecent(10);
     const params = new URL(req.url).searchParams;
+    if (params.get("diag") === "pdf") {
+      const { debugPdf } = await import("../../../../lib/news.js");
+      return Response.json(await debugPdf());
+    }
+    const result = await collectRecent(10);
     const mailto = params.get("mailto"); // 테스트 수신자 오버라이드(있으면 항상 발송)
     const only = params.get("only"); // "issues" | "report" — 테스트 시 한 종류만 발송
     // 주말·공휴일엔 수집만 하고 발송은 생략(테스트 제외)
