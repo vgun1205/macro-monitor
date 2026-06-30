@@ -323,7 +323,7 @@ const SECTIONS = [
   { label: "금리 · 해외", unit: "%", ids: ["ust5y", "ust10y", "ust20y", "ust30y", "eu10y", "eu20y"] },
   { label: "환율", unit: "원", ids: ["usdkrw", "eurkrw", "jpykrw"] },
   { label: "주가", unit: "pt/원", ids: ["kospi", "samsung", "samsungct", "skt", "skhynix", "sksquare"] },
-  { label: "스프레드 · 신용", unit: "%p", ids: ["sgb_aaa_5y", "sgb_aaa_10y", "corp_aam_3y", "corp_aam_10y"] },
+  // '스프레드·신용' 표시 제외(우선 삭제)
 ];
 const monthEndLabel = (iso) => (iso ? `'${iso.slice(2, 4)}.${Number(iso.slice(5, 7))}末` : "–");
 const dayLabel = (iso) => (iso ? `${Number(iso.slice(5, 7))}.${Number(iso.slice(8, 10))}` : "–");
