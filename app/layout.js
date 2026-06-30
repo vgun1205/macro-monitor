@@ -1,9 +1,9 @@
 import "./globals.css";
 
 export const metadata = {
-  title: "RM Native",
+  title: "RM AI Native",
   description: "Rates · FX · Credit · Equity daily monitor",
-  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "RM Native" },
+  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "RM AI Native" },
   icons: { icon: "/favicon-32.png", apple: "/apple-touch-icon.png" },
 };
 
