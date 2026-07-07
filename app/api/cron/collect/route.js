@@ -54,6 +54,13 @@ export async function GET(req) {
       const { debugPdf } = await import("../../../../lib/news.js");
       return Response.json(await debugPdf());
     }
+    if (params.get("diag") === "news") { // 소스별 수집량 점검(발송 없음)
+      const { fetchIssues } = await import("../../../../lib/news.js");
+      const items = await fetchIssues(30, 0);
+      const byKind = {};
+      items.forEach((n) => { byKind[n.kind || "?"] = (byKind[n.kind || "?"] || 0) + 1; });
+      return Response.json({ total: items.length, byKind, sample: items.slice(0, 5).map((n) => `${n.source}|${n.title.slice(0, 30)}`) });
+    }
     const result = await collectRecent(10);
     const mailto = params.get("mailto"); // 테스트 수신자 오버라이드(있으면 항상 발송)
     const only = params.get("only"); // "issues" | "report" — 테스트 시 한 종류만 발송
