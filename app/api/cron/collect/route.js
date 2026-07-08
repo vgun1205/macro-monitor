@@ -68,7 +68,15 @@ export async function GET(req) {
       const r = await sendBriefingMail(params.get("mailto") || undefined, { days: params.get("days") });
       return Response.json({ ok: true, briefing: r });
     }
-    const arch = params.get("archive"); // "html" | "zip" — 아카이브 검색 HTML 첨부 발송(전달성 테스트)
+    const arch = params.get("archive"); // "html" | "zip" | "officials"
+    if (arch === "officials") { // 금감원·협회 게시판 전체를 아카이브에 백필(본문 추출 포함)
+      const { fetchOfficials, enrichFullText } = await import("../../../../lib/news.js");
+      const { saveArticles } = await import("../../../../lib/archive.js");
+      const off = await fetchOfficials();
+      await enrichFullText(off);
+      const saved = await saveArticles(off, []);
+      return Response.json({ ok: true, officials: off.length, saved });
+    }
     if (arch) {
       const r = await sendArchiveMail(params.get("mailto") || undefined, { zip: arch === "zip", months: params.get("months") });
       return Response.json({ ok: true, archive: r });
@@ -80,8 +88,17 @@ export async function GET(req) {
       items.forEach((n) => { byKind[n.kind || "?"] = (byKind[n.kind || "?"] || 0) + 1; });
       return Response.json({ total: items.length, byKind, sample: items.slice(0, 5).map((n) => `${n.source}|${n.title.slice(0, 30)}`) });
     }
-    // 주간 AI 브리핑: 이번 주 것이 없으면 응답 후(after) 비동기 생성·저장 → 발송은 지연 없음
+    // 응답 후(after) 비동기 처리 — 발송 지연 없음
     after(async () => {
+      // ① 공식 소스(금감원·협회) 항상 아카이브에 축적(증분과 무관, 본문 추출 포함)
+      try {
+        const { fetchOfficials, enrichFullText } = await import("../../../../lib/news.js");
+        const { saveArticles } = await import("../../../../lib/archive.js");
+        const off = await fetchOfficials();
+        await enrichFullText(off);
+        await saveArticles(off, []);
+      } catch (e) { console.error("[archive] officials 축적 실패:", e.message); }
+      // ② 주간 AI 브리핑: 이번 주 것이 없으면 생성·저장
       try {
         const { isBriefingStale, refreshWeeklyBriefing } = await import("../../../../lib/briefing.js");
         if (await isBriefingStale()) await refreshWeeklyBriefing();
