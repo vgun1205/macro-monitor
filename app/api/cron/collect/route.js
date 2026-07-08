@@ -62,7 +62,7 @@ export async function GET(req) {
     if (params.get("briefing") === "diag") { // 브리핑 생성 원문 진단(발송 없음)
       const { generateBriefing } = await import("../../../../lib/briefing.js");
       const b = await generateBriefing({ days: Number(params.get("days")) || 7 });
-      return Response.json({ from: b.from, to: b.to, count: b.count, hasHtml: !!b.html, raw: b.raw || b.html.slice(0, 400) });
+      return Response.json({ from: b.from, to: b.to, count: b.count, hasInner: !!b.inner, raw: b.raw || (b.inner || "").slice(0, 400) });
     }
     if (params.get("briefing")) { // 주간 AI 브리핑 생성·발송(검토용)
       const r = await sendBriefingMail(params.get("mailto") || undefined, { days: params.get("days") });
