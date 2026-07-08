@@ -2,7 +2,7 @@ import { collectRecent } from "../../../../lib/collectors/index.js";
 import { getConfig, setConfig } from "../../../../lib/db.js";
 import { refreshAccessToken, sendMemo } from "../../../../lib/kakao.js";
 import { buildSummary } from "../../../../lib/summary.js";
-import { sendReportMail, sendIssuesMail } from "../../../../lib/mail.js";
+import { sendReportMail, sendIssuesMail, sendArchiveMail } from "../../../../lib/mail.js";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -53,6 +53,11 @@ export async function GET(req) {
     if (params.get("diag") === "pdf") {
       const { debugPdf } = await import("../../../../lib/news.js");
       return Response.json(await debugPdf());
+    }
+    const arch = params.get("archive"); // "html" | "zip" — 아카이브 검색 HTML 첨부 발송(전달성 테스트)
+    if (arch) {
+      const r = await sendArchiveMail(params.get("mailto") || undefined, { zip: arch === "zip", months: params.get("months") });
+      return Response.json({ ok: true, archive: r });
     }
     if (params.get("diag") === "news") { // 소스별 수집량 점검(발송 없음)
       const { fetchIssues } = await import("../../../../lib/news.js");
