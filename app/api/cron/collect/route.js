@@ -2,7 +2,7 @@ import { collectRecent } from "../../../../lib/collectors/index.js";
 import { getConfig, setConfig } from "../../../../lib/db.js";
 import { refreshAccessToken, sendMemo } from "../../../../lib/kakao.js";
 import { buildSummary } from "../../../../lib/summary.js";
-import { sendReportMail, sendIssuesMail, sendArchiveMail } from "../../../../lib/mail.js";
+import { sendReportMail, sendIssuesMail, sendArchiveMail, sendBriefingMail } from "../../../../lib/mail.js";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -53,6 +53,15 @@ export async function GET(req) {
     if (params.get("diag") === "pdf") {
       const { debugPdf } = await import("../../../../lib/news.js");
       return Response.json(await debugPdf());
+    }
+    if (params.get("briefing") === "diag") { // 브리핑 생성 원문 진단(발송 없음)
+      const { generateBriefing } = await import("../../../../lib/briefing.js");
+      const b = await generateBriefing({ days: Number(params.get("days")) || 7 });
+      return Response.json({ from: b.from, to: b.to, count: b.count, hasHtml: !!b.html, raw: b.raw || b.html.slice(0, 400) });
+    }
+    if (params.get("briefing")) { // 주간 AI 브리핑 생성·발송(검토용)
+      const r = await sendBriefingMail(params.get("mailto") || undefined, { days: params.get("days") });
+      return Response.json({ ok: true, briefing: r });
     }
     const arch = params.get("archive"); // "html" | "zip" — 아카이브 검색 HTML 첨부 발송(전달성 테스트)
     if (arch) {
