@@ -3,6 +3,7 @@ import { getConfig, setConfig } from "../../../../lib/db.js";
 import { refreshAccessToken, sendMemo } from "../../../../lib/kakao.js";
 import { buildSummary } from "../../../../lib/summary.js";
 import { sendReportMail, sendIssuesMail, sendArchiveMail, sendBriefingMail } from "../../../../lib/mail.js";
+import { after } from "next/server";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -54,6 +55,10 @@ export async function GET(req) {
       const { debugPdf } = await import("../../../../lib/news.js");
       return Response.json(await debugPdf());
     }
+    if (params.get("briefing") === "refresh") { // 주간 브리핑 강제 생성·저장(프라이밍/주간 갱신)
+      const { refreshWeeklyBriefing } = await import("../../../../lib/briefing.js");
+      return Response.json({ ok: true, refresh: await refreshWeeklyBriefing() });
+    }
     if (params.get("briefing") === "diag") { // 브리핑 생성 원문 진단(발송 없음)
       const { generateBriefing } = await import("../../../../lib/briefing.js");
       const b = await generateBriefing({ days: Number(params.get("days")) || 7 });
@@ -75,6 +80,13 @@ export async function GET(req) {
       items.forEach((n) => { byKind[n.kind || "?"] = (byKind[n.kind || "?"] || 0) + 1; });
       return Response.json({ total: items.length, byKind, sample: items.slice(0, 5).map((n) => `${n.source}|${n.title.slice(0, 30)}`) });
     }
+    // 주간 AI 브리핑: 이번 주 것이 없으면 응답 후(after) 비동기 생성·저장 → 발송은 지연 없음
+    after(async () => {
+      try {
+        const { isBriefingStale, refreshWeeklyBriefing } = await import("../../../../lib/briefing.js");
+        if (await isBriefingStale()) await refreshWeeklyBriefing();
+      } catch (e) { console.error("[briefing] after 갱신 실패:", e.message); }
+    });
     const result = await collectRecent(10);
     const mailto = params.get("mailto"); // 테스트 수신자 오버라이드(있으면 항상 발송)
     const only = params.get("only"); // "issues" | "report" — 테스트 시 한 종류만 발송
