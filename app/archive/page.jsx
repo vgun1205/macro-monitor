@@ -2,8 +2,8 @@
 // MI 아카이브 — 쌓인 기사(국내·글로벌)를 키워드·기간·출처로 검색해 꺼내 쓰는 화면
 import { useEffect, useState } from "react";
 
-const KIND_LABEL = { fss_report: "금감원·보도", knia_report: "손보협회·보도", knia_notice: "손보협회·공지", news: "뉴스", global: "글로벌" };
-const KIND_COLOR = { fss_report: "#1d4ed8", knia_report: "#d97706", knia_notice: "#b45309", news: "#147b8c", global: "#8a5a1f" };
+const KIND_LABEL = { fss_report: "금감원·보도", fsc_report: "금융위·보도", knia_report: "손보협회·보도", knia_notice: "손보협회·공지", news: "뉴스", global: "글로벌" };
+const KIND_COLOR = { fss_report: "#1d4ed8", fsc_report: "#6d28d9", knia_report: "#d97706", knia_notice: "#b45309", news: "#147b8c", global: "#8a5a1f" };
 
 export default function ArchivePage() {
   const [q, setQ] = useState("");
