@@ -6,7 +6,7 @@ import { sendReportMail, sendIssuesMail, sendArchiveMail, sendBriefingMail } fro
 import { after } from "next/server";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 300; // Fluid compute: 브리핑 생성+수집+발송 여유 확보(월요일 브리핑 갱신 잘림 방지)
 
 // 2026 한국 공휴일(주말은 별도 체크). 발송 제외용.
 const KR_HOLIDAYS = new Set([
@@ -88,9 +88,13 @@ export async function GET(req) {
       items.forEach((n) => { byKind[n.kind || "?"] = (byKind[n.kind || "?"] || 0) + 1; });
       return Response.json({ total: items.length, byKind, sample: items.slice(0, 5).map((n) => `${n.source}|${n.title.slice(0, 30)}`) });
     }
-    // 응답 후(after) 비동기 처리 — 발송 지연 없음
+    // 주간 AI 브리핑: 주가 바뀌었으면 발송 전에 동기 갱신(월요일 메일부터 새 주차 브리핑 반영)
+    try {
+      const { isBriefingStale, refreshWeeklyBriefing } = await import("../../../../lib/briefing.js");
+      if (await isBriefingStale()) await refreshWeeklyBriefing();
+    } catch (e) { console.error("[briefing] 사전 갱신 실패:", e.message); }
+    // 응답 후(after) 비동기 처리 — 공식 소스(금감원·협회) 아카이브 축적(증분과 무관, 본문 추출 포함)
     after(async () => {
-      // ① 공식 소스(금감원·협회) 항상 아카이브에 축적(증분과 무관, 본문 추출 포함)
       try {
         const { fetchOfficials, enrichFullText } = await import("../../../../lib/news.js");
         const { saveArticles } = await import("../../../../lib/archive.js");
@@ -98,11 +102,6 @@ export async function GET(req) {
         await enrichFullText(off);
         await saveArticles(off, []);
       } catch (e) { console.error("[archive] officials 축적 실패:", e.message); }
-      // ② 주간 AI 브리핑: 이번 주 것이 없으면 생성·저장
-      try {
-        const { isBriefingStale, refreshWeeklyBriefing } = await import("../../../../lib/briefing.js");
-        if (await isBriefingStale()) await refreshWeeklyBriefing();
-      } catch (e) { console.error("[briefing] after 갱신 실패:", e.message); }
     });
     const result = await collectRecent(10);
     const mailto = params.get("mailto"); // 테스트 수신자 오버라이드(있으면 항상 발송)
